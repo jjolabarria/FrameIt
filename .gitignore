@@ -1,0 +1,9 @@
+.vs/
+**/bin/
+**/obj/
+**/node_modules/
+**/dist/
+*.user
+*.suo
+*.cache
+*.pdb
