@@ -23,7 +23,9 @@ function App() {
       <Route path="/invitacion" element={<AuthPage invitation />} />
       <Route path="/equipo" element={<AuthGate><TeamPage /></AuthGate>} />
       <Route path="/acceso" element={<AuthPage />} />
-      <Route path="/seguridad" element={<AuthGate><SecurityPage /></AuthGate>} />
+      <Route path="/seguridad" element={<Navigate to="/configuracion/seguridad" replace />} />
+      <Route path="/configuracion" element={<Navigate to="/configuracion/seguridad" replace />} />
+      <Route path="/configuracion/seguridad" element={<AuthGate><SecurityPage /></AuthGate>} />
       <Route path="/" element={<LandingPage />} />
       <Route path="/espacio" element={<AuthGate><HomePage /></AuthGate>} />
       <Route path="/sesiones" element={<AuthGate><SessionsPage /></AuthGate>} />

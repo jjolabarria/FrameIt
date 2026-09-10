@@ -81,7 +81,7 @@ function AuthForm({ onComplete, security = false, invitationToken }: { onComplet
       <button type="button" className="secondary-button" aria-expanded={revealed} onClick={() => setRevealed(!revealed)}>{revealed ? 'Ocultar códigos' : 'Mostrar códigos de recuperación'}</button>
       {revealed && <div className="auth-recovery" aria-label="Códigos de recuperación">{codes.map(value => <code key={value}>{value}</code>)}</div>}
       {revealed && <button type="button" className="secondary-button" onClick={() => void navigator.clipboard.writeText(codes.join('\n')).catch(() => setError('No se pudo copiar. Selecciona los códigos y cópialos manualmente.'))}>Copiar todos los códigos</button>}
-      <label className="auth-check"><input type="checkbox" checked={saved} onChange={e => setSaved(e.target.checked)} />He guardado mis códigos en un lugar seguro.</label>
+      <label className="auth-check"><input type="checkbox" checked={saved} onChange={e => setSaved(e.target.checked)} /><span>He guardado mis códigos en un lugar seguro.</span></label>
       <button type="button" className="primary-button" disabled={!saved || busy} onClick={() => { setBusy(true); void complete().catch(reason => setError(reason.message)).finally(() => setBusy(false)) }}>Continuar</button>
     </> : <form onSubmit={event => void submit(event)}><fieldset disabled={busy}>
       {mode === 'credentials' && <>
@@ -144,7 +144,7 @@ export function AuthPage({ invitation = false }: { invitation?: boolean }) {
     const raw = new URLSearchParams(route.search).get('returnTo') ?? '/espacio'
     let target: URL
     try { target = new URL(raw, location.origin) } catch { target = new URL('/espacio', location.origin) }
-    const allowed = target.origin === location.origin && /^\/(?:$|espacio(?:\/|$)|clientes(?:\/|$)|sesiones(?:\/|$)|sesion\/|plantillas(?:\/|$)|equipo(?:\/|$)|disenador(?:\/|$)|seguridad(?:\/|$))/.test(target.pathname)
+    const allowed = target.origin === location.origin && /^\/(?:$|espacio(?:\/|$)|clientes(?:\/|$)|sesiones(?:\/|$)|sesion\/|plantillas(?:\/|$)|equipo(?:\/|$)|disenador(?:\/|$)|seguridad(?:\/|$)|configuracion(?:\/|$))/.test(target.pathname)
     navigate(allowed ? target.pathname + target.search + target.hash : '/espacio', { replace: true })
   }
   return <div className="auth-screen"><main className="auth-page"><Link to="/" className="brand-link" aria-label="FrameIt, inicio"><Brand /></Link><section className="auth-card">{new URLSearchParams(route.search).get('reason') === 'expired' && <p className="auth-session-notice" role="status">Tu sesión ha caducado o ya no es válida. Inicia sesión para continuar.</p>}{invitation && !invitationToken ? <><h1>Invitación incompleta</h1><p>Abre el enlace completo que te ha enviado el administrador.</p></> : invitation && auth.isAuthenticated ? <><h1>Ya tienes una sesión abierta</h1><p>Para aceptar esta invitación, cierra tu sesión actual.</p>{logoutError && <p role="alert">{logoutError}</p>}<button className="primary-button" onClick={() => void logout()}>Cerrar sesión y aceptar invitación</button></> : <AuthForm key={invitationToken ?? 'login'} onComplete={done} invitationToken={invitationToken} />}</section><p className="auth-participant-link">¿Vienes a participar en un taller? <Link to="/join">Entrar con un código</Link></p><Link className="auth-home-link" to="/">Volver al inicio</Link></main><LegalFooter /></div>
@@ -153,5 +153,5 @@ export function AuthPage({ invitation = false }: { invitation?: boolean }) {
 export function SecurityPage() {
   const [version, setVersion] = useState(0)
   const [message, setMessage] = useState('')
-  return <WorkspaceLayout title="Seguridad de la cuenta" description="Gestiona tu contraseña, autenticador y recuperación.">{message && <p role="status" className="auth-success">{message}</p>}<div className="auth-security"><AuthForm key={version} security onComplete={() => { setMessage('Cambio guardado. Tu cuenta sigue protegida con TOTP.'); setVersion(value => value + 1) }} /></div></WorkspaceLayout>
+  return <WorkspaceLayout eyebrow="Configuración del usuario" title="Seguridad de la cuenta" description="Gestiona tu contraseña, autenticador y recuperación.">{message && <p role="status" className="auth-success">{message}</p>}<div className="auth-security"><AuthForm key={version} security onComplete={() => { setMessage('Cambio guardado. Tu cuenta sigue protegida con TOTP.'); setVersion(value => value + 1) }} /></div></WorkspaceLayout>
 }

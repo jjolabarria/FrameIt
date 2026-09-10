@@ -2,9 +2,9 @@ import { OrganizationScope } from './OrganizationScope'
 import { Brand } from './Brand'
 import type { ReactNode } from 'react'
 
-import { Link, NavLink } from 'react-router-dom'
+import { Link, NavLink, useLocation } from 'react-router-dom'
 
-import { ShieldCheck, UsersRound, UserRound, Building2, LayoutDashboard, Library, Radio, Search } from 'lucide-react'
+import { Settings2, ShieldCheck, UsersRound, UserRound, Building2, LayoutDashboard, Library, Radio, Search } from 'lucide-react'
 
 import { useFacilitatorAuth } from '../hooks/useFacilitatorAuth'
 
@@ -46,7 +46,6 @@ const navItems = [
 
   { to: '/plantillas', label: 'Plantillas', icon: Library },
 
-  { to: '/seguridad', label: 'Seguridad', icon: ShieldCheck },
 
 ]
 
@@ -55,6 +54,7 @@ const navItems = [
 export function WorkspaceLayout({ children, title, eyebrow = 'FrameIt', description, search, actions }: WorkspaceLayoutProps) {
 
   const { auth, busy, error, login, logout } = useFacilitatorAuth()
+  const location = useLocation()
 
 
 
@@ -98,7 +98,7 @@ export function WorkspaceLayout({ children, title, eyebrow = 'FrameIt', descript
 
         <section className="workspace-sidebar-status">
 
-          <p className="section-label">Estado</p>
+          <p className="section-label">Tu cuenta</p>
 
           <div className="operator-chip">
 
@@ -107,6 +107,11 @@ export function WorkspaceLayout({ children, title, eyebrow = 'FrameIt', descript
             <span>{auth.isAuthenticated ? auth.name ?? 'Facilitador' : 'Sin acceso'}</span>
 
           </div>
+
+          {auth.isAuthenticated && <details className="user-settings" open={location.pathname.startsWith('/configuracion')}>
+            <summary><Settings2 size={16} /><span>Configuración del usuario</span></summary>
+            <nav aria-label="Configuración del usuario"><NavLink className={({ isActive }) => `workspace-nav-link ${isActive ? 'workspace-nav-link--active' : ''}`} to="/configuracion/seguridad"><ShieldCheck size={16} /><span>Seguridad</span></NavLink></nav>
+          </details>}
 
           {!auth.isAuthenticated ? (
 
