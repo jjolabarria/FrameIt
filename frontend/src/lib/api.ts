@@ -10,7 +10,7 @@ export async function api<T>(url: string, init?: RequestInit): Promise<T> {
 
   if (!publicSession && init?.method && !['GET', 'HEAD', 'OPTIONS'].includes(init.method.toUpperCase())) {
 
-    const csrf = await fetch('/api/auth/csrf', { credentials: 'include', cache: 'no-store' })
+    const csrf = await fetch('/api/auth/csrf', { credentials: 'include', cache: 'no-store', signal: init?.signal })
 
     if (!csrf.ok) throw new Error('No se pudo verificar el formulario. Vuelve a intentarlo.')
 

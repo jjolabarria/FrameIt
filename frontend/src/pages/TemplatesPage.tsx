@@ -15,7 +15,7 @@ function TemplateDetail({ id }: { id: string }) {
     void api<TemplateDefinition>(`/api/templates/${id}`, { signal: controller.signal }).then(setDetail).catch(e => { if (!controller.signal.aborted) setError(e.message) })
     return () => controller.abort()
   }, [id])
-  return <div className="template-detail"><ErrorNotice message={error} />{!detail && !error && <p role="status">Cargando dinámica…</p>}{detail && <><p className="muted-copy">{detail.audience}</p>{detail.sections.map(s => <section key={s.key}><h3>{s.title}</h3><p className="muted-copy">{s.objective}</p><ol>{s.questions.map(q => <li key={q.key}><strong>{q.title}</strong><p>{q.prompt}</p></li>)}</ol></section>)}<Link className="primary-button" to={`/sesiones?crear=1&templateId=${encodeURIComponent(id)}`}>Usar esta plantilla <ArrowRight size={17} /></Link></>}</div>
+  return <div className="template-detail"><ErrorNotice message={error} />{!detail && !error && <p role="status">Cargando dinámica…</p>}{detail && <><p className="muted-copy">{detail.audience}</p>{detail.sections.map(s => <section key={s.key}><h3>{s.title}</h3><p className="muted-copy">{s.objective}</p><ol>{s.questions.map(q => <li key={q.key}><strong>{q.title}</strong><p>{q.prompt}</p></li>)}</ol></section>)}<Link className="secondary-button" to={`/disenador?from=${encodeURIComponent(id)}`}>Crear variante</Link><Link className="primary-button" to={`/sesiones?crear=1&templateId=${encodeURIComponent(id)}`}>Usar esta plantilla <ArrowRight size={17} /></Link></>}</div>
 }
 export function TemplatesPage() {
   const { data, loading, error, reload } = useResource<TemplateSummary[]>('/api/templates')

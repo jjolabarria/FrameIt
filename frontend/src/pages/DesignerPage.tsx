@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useNavigate, useBlocker } from 'react-router-dom'
+import { Link, useNavigate, useBlocker, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, Clock, Eye, ListPlus, Save, Settings2, Plus, X } from 'lucide-react'
 import { WorkspaceLayout } from '../components/WorkspaceLayout'
 import { useFacilitatorAuth } from '../hooks/useFacilitatorAuth'
 import { api } from '../lib/api'
 import { label, privacyText, hasAnswerOptions } from '../lib/session'
 import { Disclosure, ErrorNotice } from '../components/SessionUI'
-import type { DesignerQuestionDraft, DesignerSectionDraft, QuestionModelCatalogItem } from '../types'
+import { TemplateAssistant } from '../components/TemplateAssistant'
+import type { DesignerQuestionDraft, DesignerSectionDraft, QuestionModelCatalogItem, TemplateDraft, TemplateDefinition } from '../types'
 
 function createQuestion(kind = 'ShortText'): DesignerQuestionDraft {
   return {
@@ -27,7 +28,16 @@ function createQuestion(kind = 'ShortText'): DesignerQuestionDraft {
 }
 
 export function DesignerPage() {
+  const [searchParams] = useSearchParams()
+  const sourceId = searchParams.get('from')
+  return <DesignerEditor key={sourceId ?? 'new'} sourceId={sourceId} />
+}
+
+function DesignerEditor({ sourceId }: { sourceId: string | null }) {
   const navigate = useNavigate()
+  const [sourceLoading, setSourceLoading] = useState(!!sourceId)
+  const [sourceError, setSourceError] = useState('')
+  const [showAssistant, setShowAssistant] = useState(false)
   const { auth, busy: authBusy, error: authError, login } = useFacilitatorAuth()
   const [catalog, setCatalog] = useState<QuestionModelCatalogItem[]>([])
   const [title, setTitle] = useState('Nueva dinámica')
@@ -47,6 +57,18 @@ export function DesignerPage() {
   const [error, setError] = useState('')
 
   useEffect(() => {
+    if (!sourceId) return
+    const controller = new AbortController()
+    void api<TemplateDefinition>(`/api/templates/${encodeURIComponent(sourceId)}`, { signal: controller.signal }).then(source => {
+      if (controller.signal.aborted) return
+      setTitle(`${source.title.slice(0, 189)} — variante`); setObjective(source.objective); setAudience(source.audience)
+      setGuidance(source.facilitatorGuidance ?? ''); setSections(source.sections); setActiveSectionIndex(0); setActiveQuestionIndex(0)
+      setSourceLoading(false)
+    }).catch((reason: Error) => { if (!controller.signal.aborted) { setSourceError(reason.message); setSourceLoading(false) } })
+    return () => controller.abort()
+  }, [sourceId])
+
+  useEffect(() => {
     void api<QuestionModelCatalogItem[]>('/api/catalog/question-models').then(setCatalog).catch((reason: Error) => setError(reason.message))
   }, [])
 
@@ -60,10 +82,16 @@ export function DesignerPage() {
   const activeQuestion = activeSection?.questions[activeQuestionIndex] ?? activeSection?.questions[0]
   const questionCount = useMemo(() => sections.reduce((sum, section) => sum + section.questions.length, 0), [sections])
   const jsonPreview = useMemo(() => JSON.stringify({ key, title, objective, audience, facilitatorGuidance: guidance, sections }, null, 2), [audience, guidance, key, objective, sections, title])
+  const draft: TemplateDraft = { key, title, objective, audience, facilitatorGuidance: guidance, sections }
+  function applyDraft(next: TemplateDraft) {
+    setTitle(next.title); setKey(next.key); setObjective(next.objective); setAudience(next.audience)
+    setGuidance(next.facilitatorGuidance ?? ''); setSections(next.sections); setActiveSectionIndex(0); setActiveQuestionIndex(0)
+    saved.current = false
+  }
 
   const initial = useRef(jsonPreview)
   const dirty = jsonPreview !== initial.current
-  const blocker = useBlocker(({ currentLocation, nextLocation }) => dirty && !saved.current && currentLocation.pathname !== nextLocation.pathname)
+  const blocker = useBlocker(({ currentLocation, nextLocation }) => dirty && !saved.current && (currentLocation.pathname !== nextLocation.pathname || currentLocation.search !== nextLocation.search))
   useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => { if (dirty && !saved.current) { event.preventDefault(); event.returnValue = '' } }
     window.addEventListener('beforeunload', warn)
@@ -109,6 +137,7 @@ export function DesignerPage() {
   }
 
   async function saveTemplate() {
+    if (sourceLoading || sourceError) return
     if (!auth.isAuthenticated) {
       setError('Debes iniciar sesión como facilitador para guardar plantillas.')
       return
@@ -137,18 +166,23 @@ export function DesignerPage() {
       description="Diseña una conversación que lleve al grupo hacia un objetivo."
       actions={
         <>
+          <button className="secondary-button" type="button" disabled={sourceLoading || !!sourceError} aria-expanded={showAssistant} onClick={() => { setShowAssistant(!showAssistant); setPreview(false) }}>{showAssistant ? 'Volver al editor manual' : 'Diseñar con IA'}</button>
           <button className="secondary-button" aria-pressed={preview} onClick={() => setPreview(!preview)}><Eye size={16} />{preview ? 'Volver al editor' : 'Vista del participante'}</button><Link className="secondary-link" to="/plantillas"><ArrowLeft size={16} /> Biblioteca</Link>
           {!auth.isAuthenticated ? <button className="secondary-button" disabled={authBusy} onClick={() => void login()} type="button">Entrar</button> : null}
-          <button className="primary-button" disabled={busy || authBusy || !auth.isAuthenticated} onClick={saveTemplate} type="button"><Save size={16} /> Guardar</button>
+          <button className="primary-button" disabled={busy || authBusy || !auth.isAuthenticated || sourceLoading || !!sourceError} onClick={saveTemplate} type="button"><Save size={16} /> {sourceId ? 'Guardar variante' : 'Guardar'}</button>
         </>
       }
     >
       <ErrorNotice message={error || authError} />
+      {sourceLoading && <p role="status">Preparando variante…</p>}
+      <ErrorNotice message={sourceError} />
+      {sourceId && !sourceLoading && !sourceError && <p className="micro-copy">Estás creando una variante. La plantilla original se conserva.</p>}
       {blocker.state === 'blocked' && <div className="confirmation" role="alert"><strong>Tienes cambios sin guardar</strong><p>Si sales ahora perderás los cambios de esta plantilla.</p><div className="action-row"><button autoFocus className="primary-button" onClick={() => blocker.reset()}>Seguir editando</button><button className="secondary-button" onClick={() => blocker.proceed()}>Salir sin guardar</button></div></div>}
       <p className="micro-copy" role="status">{dirty ? 'Cambios sin guardar' : 'Nueva plantilla'}</p>
       {preview && activeQuestion && <section className="panel"><div className="panel-head"><h2>Así verá la pregunta el participante</h2><span className="meta-chip">Vista previa · no envía respuestas</span></div><div className="participant-shell"><div className="preview-question"><p className="section-label">{activeSection.title}</p><h2>{activeQuestion.title}</h2><p>{activeQuestion.prompt}</p>{hasAnswerOptions(activeQuestion.kind) && activeQuestion.options.map(o => <label className="option-radio" key={o.id}><input type="radio" name="preview" /><span>{o.label || 'Opción sin texto'}</span></label>)}<label>Tu respuesta<textarea rows={3} placeholder="Comparte tu idea…" /></label><button className="primary-button" disabled>Enviar respuesta</button><p className="privacy-note">{privacyText(activeQuestion.presentation)}</p></div></div></section>}
 
-      <section className="designer-workbench" hidden={preview}>
+      <div className={showAssistant && !preview ? 'designer-with-assistant' : undefined}>
+      <section className="designer-workbench" hidden={preview || sourceLoading || !!sourceError}>
         <aside className="designer-outline panel">
           <div className="panel-head">
             <div><p className="section-label">Agenda</p><h2>{sections.length} {sections.length === 1 ? 'bloque' : 'bloques'}</h2></div>
@@ -231,6 +265,7 @@ export function DesignerPage() {
 
                   <option value="Anonymous">Anónima</option>
                   <option value="Named">Con nombre</option>
+                  <option value="Mixed">A elección del participante</option>
                 </select>
               </label>
 
@@ -240,6 +275,8 @@ export function DesignerPage() {
           ) : null}
         </aside>
       </section>
+      {!sourceLoading && !sourceError && <TemplateAssistant draft={draft} sectionKey={activeSection?.key} questionKey={activeQuestion?.key} onApply={applyDraft} hidden={!showAssistant || preview} />}
+      </div>
     </WorkspaceLayout>
   )
 }

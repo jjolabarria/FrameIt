@@ -20,7 +20,7 @@ export type ParticipantSummary = { id: string; displayName: string; isConnected:
 export type ResponseSummary = { id: string; participantName: string; value: string }
 export type OutcomeItem = { bucket: string; text: string }
 export type SessionSatisfactionSummary = { responseCount: number; averageRating: number; responses?: { id: string; rating: number; comment: string; submittedAtUtc: string }[] }
-export type QuestionOption = { id: string; label: string }
+export type QuestionOption = { id: string; label: string; description?: string | null }
 export type QuestionRoundContext = { roundQuestionId: string | null; roundNumber: number | null; sectionTitle: string | null; roundTitle: string | null; phase: string; roundOpenedAtUtc: string | null; sessionElapsedSeconds: number | null; roundElapsedSeconds: number | null; sessionClockTracked: boolean }
 export type SessionQuestionItem = { id: string; participantName: string; question: string; createdAtUtc: string; roundContext?: QuestionRoundContext | null }
 export type SessionAttachment = { id: string; fileName: string; contentType: string; sizeBytes: number; uploadedBy: string; url: string; uploadedAtUtc: string }
@@ -69,9 +69,11 @@ export type QuestionModelCatalogItem = {
 }
 
 export type SessionAgendaSection = { id: string; title: string; order: number; questions: { id: string; title: string; order: number }[] }
-export type TemplateDefinition = { title: string; objective: string; audience: string; sections: DesignerSectionDraft[] }
+export type TemplateDraft = { key: string; title: string; objective: string; audience: string; facilitatorGuidance: string | null; sections: DesignerSectionDraft[] }
+export type TemplateDefinition = TemplateDraft & { schemaVersion: string; outcomeBuckets: string[] }
 
 export type DesignerQuestionDraft = {
+  settings?: Record<string, string> | null
   key: string
   kind: string
   title: string

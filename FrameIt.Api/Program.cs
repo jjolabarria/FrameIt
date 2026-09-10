@@ -30,6 +30,7 @@ builder.Services.Configure<S3StorageOptions>(builder.Configuration.GetSection("S
 builder.Services.Configure<OpenAiOptions>(builder.Configuration.GetSection("OpenAI"));
 builder.Services.AddSingleton<IStorageService, S3StorageService>();
 builder.AddLocalAuth();
+builder.AddTemplateAssistant();
 builder.Services.AddDbContext<AppDbContext>(options =>
 {
     var connectionString = builder.Configuration.GetConnectionString("Postgres");
@@ -66,6 +67,7 @@ app.UseAuthorization();
 app.MapWorkspaceEndpoints();
 
 app.MapLocalAuth();
+app.MapTemplateAssistant();
 app.MapGet("/api/health", async (AppDbContext db) => await db.Database.CanConnectAsync() ? Results.Ok(new { status = "healthy" }) : Results.StatusCode(503));
 
 app.MapGet("/api/catalog/question-models", () =>
@@ -169,6 +171,8 @@ app.MapGet("/api/templates/{id:guid}", async (Guid id, AppDbContext db) =>
 app.MapPost("/api/templates", async (CreateTemplateRequest request, AppDbContext db) =>
 {
     if (db.CurrentOrganizationId is not Guid organizationId) return Results.BadRequest(new { message = "Selecciona una organización antes de crear una plantilla." });
+    if (TemplateValidation.Validate(request) is { } error) return Results.BadRequest(new { message = error });
+    if (await db.DynamicTemplates.AnyAsync(x => x.Key == request.Key)) return Results.Conflict(new { message = "Ya existe una plantilla con esa clave." });
     var template = request.ToEntity();
     template.OrganizationId = organizationId;
     db.DynamicTemplates.Add(template);
@@ -197,6 +201,7 @@ app.MapPost("/api/templates/import", async (ImportTemplateEnvelope envelope, App
         envelope.Template.FacilitatorGuidance,
         envelope.Template.Sections);
 
+    if (TemplateValidation.Validate(request) is { } error) return Results.BadRequest(new { message = error });
     var entity = request.ToEntity();
     entity.OrganizationId = organizationId;
     db.DynamicTemplates.Add(entity);
