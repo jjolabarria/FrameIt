@@ -32,10 +32,11 @@
 .lp-hero-actions { align-items: center; }
 .lp-access-note { font-size: 1rem; color: #cadbd0; line-height: 1.5; margin: 20px 0 0; max-width: 48ch; }
 .lp-workshop { scroll-margin-top: 24px; }
-.lp-workshop-heading { border-top: 2px solid var(--lp-ink); padding-block: 24px 16px; }
-.lp-workshop-heading .lp-kicker { margin-bottom: 16px; }
-.lp-workshop-intro { max-width: 65ch; margin: 20px 0 0; }
-.lp-workshop-heading h2 { font-size: clamp(2rem, 2.5vw + .25rem, 2.75rem); line-height: 1.2; letter-spacing: -.035em; max-width: 30ch; margin: 0; }
+.lp-workshop-heading { border-top: 2px solid var(--lp-ink); display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(260px, .75fr); align-items: end; gap: clamp(40px, 8vw, 120px); padding-block: 24px 28px; }
+.lp-workshop-heading-main .lp-kicker { margin-bottom: 16px; }
+.lp-workshop-heading h2 { font-size: clamp(2rem, 2.5vw + .25rem, 2.75rem); line-height: 1.2; letter-spacing: -.035em; max-width: 24ch; margin: 0; }
+.lp-workshop-heading-aside { display: grid; align-content: end; gap: 20px; max-width: 36ch; }
+.lp-workshop-intro { max-width: 65ch; margin: 0; }
 .lp-example-label { font-size: .875rem; color: var(--lp-muted); flex-shrink: 0; }
 .lp-stage-controls { display: flex; border-bottom: 1px solid var(--lp-line); }
 .lp-stage-controls button { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 16px 24px; min-height: 52px; flex: 1; min-width: 0; text-align: left; background: transparent; border: 0; border-top: 1px solid var(--lp-line); border-right: 1px solid var(--lp-line); color: var(--lp-muted); cursor: pointer; }
@@ -131,7 +132,9 @@
   .lp-intro { font-size: 1.125rem; max-width: 45ch; margin-bottom: 20px; }
   .lp-hero-actions { align-items: center; gap: 8px 20px; }
   .lp-access-note { max-width: 45ch; }
-  .lp-workshop-heading { flex-direction: column; gap: 6px; }
+  .lp-workshop-heading { display: block; padding-block: 20px 22px; }
+  .lp-workshop-heading-aside { display: block; max-width: 45ch; margin-top: 18px; }
+  .lp-workshop-heading-aside .lp-example-label { margin: 14px 0 0; }
   .lp-stage-controls button { padding: 12px 8px; gap: 6px; font-size: 1rem; }
   .lp-stage-name { gap: 5px; }
   .lp-stage-name > span { font-size: .75rem; }

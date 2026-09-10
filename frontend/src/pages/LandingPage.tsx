@@ -32,11 +32,15 @@ export function LandingPage() {
       </section>
       <section id="como-funciona" className="lp-workshop lp-width" aria-labelledby="workflow-title">
         <div className="lp-workshop-heading">
-          <p className="lp-kicker">Cómo funciona FrameIt</p>
-          <h2 id="workflow-title">Prepara el taller. Da voz al equipo. Conserva lo aprendido.</h2>
-          <p className="lp-workshop-intro">Tú guías la sesión; el equipo aporta. Descubre cómo una pregunta pasa del guion del taller a su documentación.</p>
+          <div className="lp-workshop-heading-main">
+            <p className="lp-kicker">Cómo funciona FrameIt</p>
+            <h2 id="workflow-title">Prepara el taller. Da voz al equipo. Conserva lo aprendido.</h2>
+          </div>
+          <div className="lp-workshop-heading-aside">
+            <p className="lp-workshop-intro">Tú guías la sesión; el equipo aporta. Descubre cómo una pregunta pasa del guion del taller a su documentación.</p>
+            <p className="lp-example-label">Explora un taller de ejemplo</p>
+          </div>
         </div>
-        <p className="lp-example-label">Explora un taller de ejemplo</p>
         <div className="lp-stage-controls" role="group" aria-label="Explorar las etapas del taller">
           {stages.map((item, index) => <button type="button" key={item.name} aria-pressed={stage === index} aria-controls="stage-content" onClick={() => { setStage(index); setRevealed(false) }}>
             <span className="lp-stage-name"><span>0{index + 1}</span>{item.name}</span>
