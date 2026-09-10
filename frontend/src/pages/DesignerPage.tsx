@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useBlocker, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, Clock, Eye, ListPlus, Save, Settings2, Plus, X } from 'lucide-react'
+import { ArrowDown, ArrowLeft, ArrowUp, Clock, Eye, ListPlus, Save, Settings2, Plus, X } from 'lucide-react'
 import { AnimatePresence } from 'motion/react'
 import { WorkspaceLayout } from '../components/WorkspaceLayout'
 import { useFacilitatorAuth } from '../hooks/useFacilitatorAuth'
@@ -118,6 +118,33 @@ function DesignerEditor({ sourceId }: { sourceId: string | null }) {
     updateQuestion({ presentation: { ...activeQuestion.presentation, ...patch } })
   }
 
+  function moveSection(sectionIndex: number, direction: -1 | 1) {
+    const targetIndex = sectionIndex + direction
+    if (targetIndex < 0 || targetIndex >= sections.length) return
+    setSections(current => {
+      const next = [...current]
+      const [moved] = next.splice(sectionIndex, 1)
+      next.splice(targetIndex, 0, moved)
+      return next.map((section, index) => ({ ...section, order: index + 1 }))
+    })
+    setActiveSectionIndex(current => current === sectionIndex ? targetIndex : current === targetIndex ? sectionIndex : current)
+    setActiveQuestionIndex(0)
+  }
+
+  function moveQuestion(questionIndex: number, direction: -1 | 1) {
+    if (!activeSection) return
+    const targetIndex = questionIndex + direction
+    if (targetIndex < 0 || targetIndex >= activeSection.questions.length) return
+    setSections(current => current.map((section, index) => {
+      if (index !== activeSectionIndex) return section
+      const questions = [...section.questions]
+      const [moved] = questions.splice(questionIndex, 1)
+      questions.splice(targetIndex, 0, moved)
+      return { ...section, questions }
+    }))
+    setActiveQuestionIndex(current => current === questionIndex ? targetIndex : current === targetIndex ? questionIndex : current)
+  }
+
   function updateSlideSetting(key: string, value: string) {
     updateQuestion({ settings: { ...(activeQuestion?.settings ?? {}), [key]: value } })
   }
@@ -207,10 +234,16 @@ function DesignerEditor({ sourceId }: { sourceId: string | null }) {
           </div>
           <div className="outline-list">
             {sections.map((section, sectionIndex) => (
-              <button aria-pressed={activeSectionIndex === sectionIndex} className={`outline-item ${activeSectionIndex === sectionIndex ? 'outline-item--active' : ''}`} key={section.key} onClick={() => { setActiveSectionIndex(sectionIndex); setActiveQuestionIndex(0) }} type="button">
-                <strong>{section.title}</strong>
-                <span>{section.questions.length} {section.questions.length === 1 ? 'pregunta' : 'preguntas'}</span>
-              </button>
+              <div className="outline-item-row" key={section.key}>
+                <button aria-pressed={activeSectionIndex === sectionIndex} className={`outline-item ${activeSectionIndex === sectionIndex ? 'outline-item--active' : ''}`} onClick={() => { setActiveSectionIndex(sectionIndex); setActiveQuestionIndex(0) }} type="button">
+                  <strong>{section.title}</strong>
+                  <span>{section.questions.length} {section.questions.length === 1 ? 'pregunta' : 'preguntas'}</span>
+                </button>
+                <div className="outline-item-actions" aria-label={`Ordenar ${section.title}`}>
+                  <button className="icon-button" disabled={sectionIndex === 0} onClick={() => moveSection(sectionIndex, -1)} type="button" aria-label={`Subir ${section.title}`} title="Subir bloque"><ArrowUp size={14} /></button>
+                  <button className="icon-button" disabled={sectionIndex === sections.length - 1} onClick={() => moveSection(sectionIndex, 1)} type="button" aria-label={`Bajar ${section.title}`} title="Bajar bloque"><ArrowDown size={14} /></button>
+                </div>
+              </div>
             ))}
           </div>
         </aside>
@@ -242,9 +275,15 @@ function DesignerEditor({ sourceId }: { sourceId: string | null }) {
 
               <div className="question-tabs">
                 {activeSection.questions.map((question, questionIndex) => (
-                  <button aria-pressed={activeQuestionIndex === questionIndex} className={activeQuestionIndex === questionIndex ? 'question-tab question-tab--active' : 'question-tab'} key={question.key} onClick={() => setActiveQuestionIndex(questionIndex)} type="button">
-                    {questionIndex + 1}. {question.title}
-                  </button>
+                  <div className="question-tab-row" key={question.key}>
+                    <button aria-pressed={activeQuestionIndex === questionIndex} className={activeQuestionIndex === questionIndex ? 'question-tab question-tab--active' : 'question-tab'} onClick={() => setActiveQuestionIndex(questionIndex)} type="button">
+                      {questionIndex + 1}. {question.title}
+                    </button>
+                    <div className="question-tab-actions" aria-label={`Ordenar ${question.title}`}>
+                      <button className="icon-button" disabled={questionIndex === 0} onClick={() => moveQuestion(questionIndex, -1)} type="button" aria-label={`Subir ${question.title}`} title="Subir pregunta"><ArrowUp size={13} /></button>
+                      <button className="icon-button" disabled={questionIndex === activeSection.questions.length - 1} onClick={() => moveQuestion(questionIndex, 1)} type="button" aria-label={`Bajar ${question.title}`} title="Bajar pregunta"><ArrowDown size={13} /></button>
+                    </div>
+                  </div>
                 ))}
               </div>
 
