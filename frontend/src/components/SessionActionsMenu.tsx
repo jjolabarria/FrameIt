@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { Ellipsis } from 'lucide-react'
 
 type Action = { label: string; run: () => void; disabled?: boolean; danger?: boolean }
-export function SessionActionsMenu({ actions, disabled }: { actions: Action[]; disabled: boolean }) {
+export function SessionActionsMenu({ actions, disabled, label = 'Más acciones', ariaLabel = 'Acciones de la sesión' }: { actions: Action[]; disabled: boolean; label?: string; ariaLabel?: string }) {
   const [open, setOpen] = useState(false)
   const trigger = useRef<HTMLButtonElement>(null)
   const menu = useRef<HTMLDivElement>(null)
@@ -46,10 +46,10 @@ export function SessionActionsMenu({ actions, disabled }: { actions: Action[]; d
     }
   }, [open])
   return <>
-    <button ref={trigger} className="secondary-button session-actions-trigger" disabled={disabled} aria-haspopup="menu" aria-expanded={open} aria-controls={open ? id : undefined}
+    <button ref={trigger} type="button" className="session-actions-trigger" disabled={disabled} aria-haspopup="menu" aria-expanded={open} aria-controls={open ? id : undefined}
       onClick={() => { lastFirst.current = false; setOpen(value => !value) }}
-      onKeyDown={event => { if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); lastFirst.current = event.key === 'ArrowUp'; setOpen(true) } }}><Ellipsis size={19} aria-hidden="true" />Más acciones</button>
-    {open && createPortal(<div ref={menu} id={id} role="menu" aria-label="Acciones de la sesión" className="session-actions-menu" style={{ visibility: 'hidden' }} onKeyDown={event => {
+      onKeyDown={event => { if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); lastFirst.current = event.key === 'ArrowUp'; setOpen(true) } }}><Ellipsis size={19} aria-hidden="true" /><span>{label}</span></button>
+    {open && createPortal(<div ref={menu} id={id} role="menu" aria-label={ariaLabel} className="user-menu-popover session-actions-menu" style={{ visibility: 'hidden' }} onKeyDown={event => {
       if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close(true); return }
       if (event.key === 'Tab') { close(true); return }
       const items = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')]

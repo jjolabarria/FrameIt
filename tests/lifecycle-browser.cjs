@@ -31,18 +31,19 @@ const root = process.env.FRAMEIT_TEST_URL || 'http://127.0.0.1:5175';
    }
    await route.fulfill({ status, contentType: 'application/json', body: status === 204 ? '' : JSON.stringify(body) });
   });
-  async function openAction(name, action) {
+ async function openAction(name, action) {
    const row = page.locator('.collection-list > article, tbody > tr').filter({ hasText: name });
-   await row.locator('summary').click(); await row.getByRole('button', { name: action, exact: true }).click();
+   await row.getByRole('button', { name: 'Gestionar', exact: true }).click(); await page.getByRole('menuitem', { name: action, exact: true }).click();
    await page.getByRole('dialog').waitFor();
-  }
+ }
   for (const [kind, path, name] of [['templates', '/plantillas', 'Dinámica propia'], ['clients', '/clientes', 'Cliente vacío'], ['projects', '/clientes/client', 'Proyecto vacío'], ['sessions', '/sesiones', 'Sesión vacía']]) {
    await page.goto(root + path);
    await openAction(name, 'Archivar'); const before = writes.length;
    await page.getByRole('dialog').getByRole('button', { name: 'Cancelar', exact: true }).click();
    assert.equal(writes.length, before);
    const row = page.locator('.collection-list > article, tbody > tr').filter({ hasText: name });
-   await row.getByRole('button', { name: 'Archivar', exact: true }).click();
+   await row.getByRole('button', { name: 'Gestionar', exact: true }).click();
+   await page.getByRole('menuitem', { name: 'Archivar', exact: true }).click();
    await page.getByRole('dialog').getByRole('button', { name: 'Archivar', exact: true }).click();
    await page.getByRole('dialog').waitFor({ state: 'hidden' });
    await page.getByLabel('Mostrar', { exact: true }).selectOption('archived');
