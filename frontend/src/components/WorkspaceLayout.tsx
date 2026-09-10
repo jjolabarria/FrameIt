@@ -1,9 +1,10 @@
+import { OrganizationScope } from './OrganizationScope'
 import { Brand } from './Brand'
 import type { ReactNode } from 'react'
 
 import { Link, NavLink } from 'react-router-dom'
 
-import { ShieldCheck, UserRound, Building2, LayoutDashboard, Library, Radio, Search } from 'lucide-react'
+import { ShieldCheck, UsersRound, UserRound, Building2, LayoutDashboard, Library, Radio, Search } from 'lucide-react'
 
 import { useFacilitatorAuth } from '../hooks/useFacilitatorAuth'
 
@@ -73,7 +74,7 @@ export function WorkspaceLayout({ children, title, eyebrow = 'FrameIt', descript
 
         <nav className="workspace-nav" aria-label="Navegación principal">
 
-          {navItems.map((item) => {
+          {[...navItems, ...(auth.isAdmin ? [{ to: '/equipo', label: 'Equipo', icon: UsersRound }] : [])].map((item) => {
 
             const Icon = item.icon
 
@@ -142,6 +143,7 @@ export function WorkspaceLayout({ children, title, eyebrow = 'FrameIt', descript
 
 
           <div className="workspace-topbar-actions">
+            <OrganizationScope />
 
             {search ? (
 

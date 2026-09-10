@@ -4,6 +4,8 @@ namespace FrameIt.Api.Data;
 
 public sealed class Client
 {
+    public Guid OrganizationId { get; set; } = Organization.DefaultId;
+    public Organization? Organization { get; set; }
     public Guid Id { get; set; } = Guid.NewGuid();
     public string Name { get; set; } = string.Empty;
     public string Industry { get; set; } = string.Empty;
@@ -22,6 +24,8 @@ public sealed class Project
 
 public sealed class DynamicTemplate
 {
+    public Guid? OrganizationId { get; set; }
+    public Organization? Organization { get; set; }
     public Guid Id { get; set; } = Guid.NewGuid();
     public string Key { get; set; } = string.Empty;
     public string Title { get; set; } = string.Empty;

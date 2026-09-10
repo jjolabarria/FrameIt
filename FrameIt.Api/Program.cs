@@ -11,6 +11,8 @@ using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args.Where(x => !x.StartsWith("--reset-local-auth") && !x.StartsWith("--confirm-local-auth-reset")).ToArray());
 
+var publicUrls = new PublicUrls(builder.Configuration["FRAMEIT_PUBLIC_URL"]);
+builder.Services.AddSingleton(publicUrls);
 builder.Services.AddOpenApi();
 builder.Services.AddSignalR();
 builder.Services.AddHostedService<RoundTimerService>();
@@ -111,7 +113,8 @@ app.MapGet("/api/clients", async (AppDbContext db) =>
 app.MapPost("/api/clients", async (CreateClientRequest request, AppDbContext db) =>
 {
     if (!WorkspaceEndpoints.ValidClient(request.Name, request.Industry)) return Results.BadRequest(new { message = "Indica un nombre (máximo 160 caracteres) y sector (máximo 100)." });
-    var client = new Client { Name = request.Name.Trim(), Industry = request.Industry.Trim() };
+    if (db.CurrentOrganizationId is not Guid organizationId) return Results.BadRequest(new { message = "Selecciona una organización antes de crear un cliente." });
+    var client = new Client { Name = request.Name.Trim(), Industry = request.Industry.Trim(), OrganizationId = organizationId };
     db.Clients.Add(client);
     await db.SaveChangesAsync();
     return Results.Created($"/api/clients/{client.Id}", client.Id);
@@ -120,7 +123,7 @@ app.MapPost("/api/clients", async (CreateClientRequest request, AppDbContext db)
 app.MapPost("/api/projects", async (CreateProjectRequest request, AppDbContext db) =>
 {
     if (!WorkspaceEndpoints.ValidProject(request.Name, request.Code)) return Results.BadRequest(new { message = "Indica un nombre (máximo 160 caracteres) y código (máximo 30)." });
-    var client = await db.Clients.FindAsync(request.ClientId);
+    var client = await db.Clients.SingleOrDefaultAsync(x => x.Id == request.ClientId);
     if (client is null)
     {
         return Results.NotFound(new { message = "Client not found." });
@@ -165,7 +168,9 @@ app.MapGet("/api/templates/{id:guid}", async (Guid id, AppDbContext db) =>
 
 app.MapPost("/api/templates", async (CreateTemplateRequest request, AppDbContext db) =>
 {
+    if (db.CurrentOrganizationId is not Guid organizationId) return Results.BadRequest(new { message = "Selecciona una organización antes de crear una plantilla." });
     var template = request.ToEntity();
+    template.OrganizationId = organizationId;
     db.DynamicTemplates.Add(template);
     await db.SaveChangesAsync();
     return Results.Created($"/api/templates/{template.Id}", template.Id);
@@ -173,6 +178,7 @@ app.MapPost("/api/templates", async (CreateTemplateRequest request, AppDbContext
 
 app.MapPost("/api/templates/import", async (ImportTemplateEnvelope envelope, AppDbContext db) =>
 {
+    if (db.CurrentOrganizationId is not Guid organizationId) return Results.BadRequest(new { message = "Selecciona una organización antes de importar una plantilla." });
     if (envelope.Template.SchemaVersion is not ("frameit.dynamic-template/v1" or "frameit.dynamic-template/v2"))
     {
         return Results.BadRequest(new { message = "Unsupported template schema version." });
@@ -192,6 +198,7 @@ app.MapPost("/api/templates/import", async (ImportTemplateEnvelope envelope, App
         envelope.Template.Sections);
 
     var entity = request.ToEntity();
+    entity.OrganizationId = organizationId;
     db.DynamicTemplates.Add(entity);
     await db.SaveChangesAsync();
     return Results.Created($"/api/templates/{entity.Id}", entity.Id);
@@ -211,7 +218,7 @@ app.MapGet("/api/templates/{id:guid}/export", async (Guid id, AppDbContext db) =
 
 app.MapGet("/api/sessions", async (HttpContext httpContext, AppDbContext db) =>
 {
-    var baseUrl = $"{httpContext.Request.Scheme}://{httpContext.Request.Host}";
+    var baseUrl = publicUrls.Origin(httpContext.Request);
     var sessions = await db.WorkshopSessions
         .Include(x => x.Template)
         .OrderByDescending(x => x.UpdatedAtUtc)
@@ -234,10 +241,14 @@ app.MapPost("/api/sessions", async (CreateSessionRequest request, HttpContext ht
         return Results.NotFound(new { message = "Template not found." });
     }
 
-    if (!await db.Clients.AnyAsync(x => x.Id == request.ClientId))
+    var sessionClient = await db.Clients.SingleOrDefaultAsync(x => x.Id == request.ClientId);
+    if (sessionClient is null)
     {
         return Results.NotFound(new { message = "Client not found." });
     }
+
+    if (!template.IsBuiltIn && template.OrganizationId != sessionClient.OrganizationId)
+        return Results.BadRequest(new { message = "La plantilla y el cliente deben pertenecer a la misma organización." });
 
     if (!await db.Projects.AnyAsync(x => x.Id == request.ProjectId && x.ClientId == request.ClientId))
     {
@@ -248,7 +259,7 @@ app.MapPost("/api/sessions", async (CreateSessionRequest request, HttpContext ht
     db.WorkshopSessions.Add(session);
     await db.SaveChangesAsync();
 
-    var baseUrl = $"{httpContext.Request.Scheme}://{httpContext.Request.Host}";
+    var baseUrl = publicUrls.Origin(httpContext.Request);
     return Results.Created($"/api/sessions/{session.Id}", session.ToSummary(baseUrl));
 }).RequireAuthorization();
 
@@ -260,14 +271,14 @@ app.MapGet("/api/sessions/{id:guid}", async (Guid id, HttpContext httpContext, A
         return Results.NotFound();
     }
 
-    var baseUrl = $"{httpContext.Request.Scheme}://{httpContext.Request.Host}";
+    var baseUrl = publicUrls.Origin(httpContext.Request);
     return Results.Ok(session.ToSnapshot(baseUrl));
 }).RequireAuthorization();
 
 app.MapGet("/api/sessions/{id:guid}/facilitator", async (Guid id, HttpContext httpContext, AppDbContext db) =>
 {
     var session = await LoadSession(db, id);
-    return session is null ? Results.NotFound() : Results.Ok(session.ToSnapshot($"{httpContext.Request.Scheme}://{httpContext.Request.Host}", facilitator: true));
+    return session is null ? Results.NotFound() : Results.Ok(session.ToSnapshot(publicUrls.Origin(httpContext.Request), facilitator: true));
 }).RequireAuthorization();
 
 app.MapGet("/api/sessions/{id:guid}/agenda", async (Guid id, AppDbContext db) =>
@@ -286,7 +297,7 @@ app.MapGet("/api/sessions/by-code/{accessCode}", async (string accessCode, HttpC
         return Results.NotFound();
     }
 
-    var baseUrl = $"{httpContext.Request.Scheme}://{httpContext.Request.Host}";
+    var baseUrl = publicUrls.Origin(httpContext.Request);
     return Results.Ok(session.ToSnapshot(baseUrl));
 });
 
@@ -334,7 +345,7 @@ app.MapPost("/api/sessions/{id:guid}/join", async (
     if (!session.Participants.Any(x => x.Id == participant.Id)) session.Participants.Add(participant);
     session.UpdatedAtUtc = updatedAtUtc;
 
-    var baseUrl = $"{httpContext.Request.Scheme}://{httpContext.Request.Host}";
+    var baseUrl = publicUrls.Origin(httpContext.Request);
     await hubContext.PublishSession(session, baseUrl, db);
     return Results.Ok(new { participant.Id });
 });
@@ -391,7 +402,7 @@ app.MapDelete("/api/sessions/{id:guid}/participants/{participantId:guid}", async
         return Results.NotFound();
     }
 
-    var baseUrl = $"{httpContext.Request.Scheme}://{httpContext.Request.Host}";
+    var baseUrl = publicUrls.Origin(httpContext.Request);
     var snapshot = refreshedSession.ToSnapshot(baseUrl, facilitator: true);
     await hubContext.PublishSession(refreshedSession, baseUrl, db);
     return Results.Ok(snapshot);
@@ -455,7 +466,7 @@ app.MapPost("/api/sessions/{id:guid}/advance", async (
 
     await transaction.CommitAsync();
 
-    var baseUrl = $"{httpContext.Request.Scheme}://{httpContext.Request.Host}";
+    var baseUrl = publicUrls.Origin(httpContext.Request);
     var snapshot = session.ToSnapshot(baseUrl, facilitator: true);
     await hubContext.PublishSession(session, baseUrl, db);
     return Results.Ok(snapshot);
@@ -518,7 +529,7 @@ app.MapPost("/api/sessions/{id:guid}/round-state", async (
 
     await transaction.CommitAsync();
 
-    var baseUrl = $"{httpContext.Request.Scheme}://{httpContext.Request.Host}";
+    var baseUrl = publicUrls.Origin(httpContext.Request);
     var snapshot = session.ToSnapshot(baseUrl, facilitator: true);
     await hubContext.PublishSession(session, baseUrl, db);
     return Results.Ok(snapshot);
@@ -581,7 +592,7 @@ app.MapPost("/api/sessions/{id:guid}/responses", async (
         .ExecuteUpdateAsync(setters => setters
             .SetProperty(x => x.UpdatedAtUtc, updatedAtUtc));
 
-    var baseUrl = $"{httpContext.Request.Scheme}://{httpContext.Request.Host}";
+    var baseUrl = publicUrls.Origin(httpContext.Request);
     db.ChangeTracker.Clear();
     var refreshedSession = await LoadSession(db, id);
     if (refreshedSession is null)
@@ -616,7 +627,7 @@ app.MapPost("/api/sessions/{id:guid}/outcomes", async (
     session.UpdatedAtUtc = DateTimeOffset.UtcNow;
     await db.SaveChangesAsync();
 
-    var baseUrl = $"{httpContext.Request.Scheme}://{httpContext.Request.Host}";
+    var baseUrl = publicUrls.Origin(httpContext.Request);
     var snapshot = session.ToSnapshot(baseUrl, facilitator: true);
     await hubContext.PublishSession(session, baseUrl, db);
     return Results.Ok(snapshot);
@@ -670,7 +681,7 @@ app.MapPost("/api/sessions/{id:guid}/questions", async (
             .SetProperty(x => x.UpdatedAtUtc, updatedAtUtc));
 
     await transaction.CommitAsync();
-    var baseUrl = $"{httpContext.Request.Scheme}://{httpContext.Request.Host}";
+    var baseUrl = publicUrls.Origin(httpContext.Request);
     db.ChangeTracker.Clear();
     var refreshedSession = await LoadSession(db, id);
     if (refreshedSession is null)
@@ -757,7 +768,7 @@ app.MapPost("/api/sessions/{id:guid}/feedback", async (
 
     await transaction.CommitAsync();
 
-    var baseUrl = $"{httpContext.Request.Scheme}://{httpContext.Request.Host}";
+    var baseUrl = publicUrls.Origin(httpContext.Request);
     db.ChangeTracker.Clear();
     var refreshedSession = await LoadSession(db, id);
     if (refreshedSession is null)
@@ -800,7 +811,7 @@ app.MapPost("/api/sessions/{id:guid}/survey-state", async (
 
     await transaction.CommitAsync();
 
-    var baseUrl = $"{httpContext.Request.Scheme}://{httpContext.Request.Host}";
+    var baseUrl = publicUrls.Origin(httpContext.Request);
     var snapshot = session.ToSnapshot(baseUrl, facilitator: true);
     await hubContext.PublishSession(session, baseUrl, db);
     return Results.Ok(snapshot);
@@ -856,7 +867,7 @@ app.MapPost("/api/sessions/{id:guid}/attachments", async (
         .ExecuteUpdateAsync(setters => setters
             .SetProperty(x => x.UpdatedAtUtc, updatedAtUtc), cancellationToken);
 
-    var baseUrl = $"{httpContext.Request.Scheme}://{httpContext.Request.Host}";
+    var baseUrl = publicUrls.Origin(httpContext.Request);
     db.ChangeTracker.Clear();
     var refreshedSession = await LoadSession(db, id);
     if (refreshedSession is null)
@@ -949,7 +960,7 @@ static string GenerateAccessCode(AppDbContext db)
                 span[index] = chars[Random.Shared.Next(chars.Length)];
             }
         });
-    } while (db.WorkshopSessions.Any(x => x.AccessCode == code));
+    } while (db.WorkshopSessions.IgnoreQueryFilters().Any(x => x.AccessCode == code));
 
     return code;
 }

@@ -24,7 +24,7 @@ export async function refreshAuth() {
   refreshing = api<FacilitatorAuthState>('/api/auth/me').then(state => {
     if (generation !== started) return
     if (!state.isAuthenticated && current.isAuthenticated) window.dispatchEvent(new Event('frameit-auth-required'))
-    else if (!checked || state.isAuthenticated !== current.isAuthenticated || state.name !== current.name) publishAuth(state, false)
+    else if (!checked || state.isAuthenticated !== current.isAuthenticated || state.name !== current.name || state.isAdmin !== current.isAdmin || state.organizationId !== current.organizationId) publishAuth(state, false)
   }).finally(() => { refreshing = null })
   return refreshing
 }

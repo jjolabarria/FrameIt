@@ -10,6 +10,8 @@ Copy-Item .env.example .env
 
 Edita `.env` para configurar el puerto, la contraseña de PostgreSQL o los servicios opcionales. `.env` está excluido de Git y de las imágenes. Sin `.env`, se usan los valores locales predeterminados, sin IA ni adjuntos S3.
 
+Puedes definir `FRAMEIT_BOOTSTRAP_TOKEN` en `.env` o en las variables **Environment** de Dokploy para elegir el código de instalación inicial (32–128 caracteres aleatorios sin espacios). Si está vacío, se genera un código en el volumen de autenticación. Consulta [primer acceso](local-auth.md) para activar la cuenta; después puedes retirar la variable.
+
 Valida y arranca:
 
 ```powershell
@@ -40,6 +42,16 @@ Este despliegue utiliza autenticación local del facilitador con contraseña y T
 El dominio previsto para la aplicación es **frame-it.es**, indicado por el propietario del proyecto. Este Compose sigue sirviendo en localhost; la publicación del dominio, los registros DNS y HTTPS están pendientes de configurar y verificar en el alojamiento elegido.
 
 El modelo configurado para el resumen con IA es `gpt-5.6-luna`. Para activar ese resumen hace falta una clave en `FRAMEIT_OPENAI_API_KEY` de `.env`. Sin clave, la documentación PDF sigue disponible con los datos registrados. Las pruebas locales con proveedor simulado no verifican el acceso de una cuenta real a Luna.
+
+## Dominio público de QR y enlaces
+
+En las variables de entorno del Compose en Dokploy configura `FRAMEIT_PUBLIC_URL=https://frame-it.es` y vuelve a desplegar. Compose pasa el valor a la API en tiempo de ejecución; no requiere variables de compilación de Vite.
+
+La API utiliza ese origen para todos los QR y enlaces `/join/{codigo}`, incluidas las actualizaciones en directo, y para los enlaces de invitación que muestra el backoffice. El dominio interno y el protocolo HTTP entre contenedores no afectan a los enlaces. Los QR de alta TOTP siguen utilizando su URI de autenticación.
+
+El valor debe ser una URL absoluta HTTP(S), sin ruta, credenciales, parámetros ni fragmento. Se admite barra final; una configuración inválida impide el arranque con un error de configuración. Para desarrollo local puede dejarse vacío: se usan el protocolo, host y puerto de la petición recibida por la API. No modifica el dominio de los archivos S3 ni configura DNS, certificados o las rutas de Dokploy. Los enlaces se regeneran al consultar la sesión; los QR ya descargados conservan su URL original.
+
+Comprobación automatizada: `dotnet run --project tests/PublicUrls`.
 
 ## Validación del Compose actualizado (10/09/2026)
 

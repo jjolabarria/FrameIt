@@ -13,7 +13,7 @@ type Status = { setupRequired: boolean; pending?: string; isAuthenticated: boole
 type Result = { step?: string; recoveryCodes?: string[]; complete?: boolean }
 type Mode = 'loading' | 'credentials' | 'setup' | 'login' | 'rotate' | 'recovery' | 'security'
 
-function AuthForm({ onComplete, security = false }: { onComplete: () => void; security?: boolean }) {
+function AuthForm({ onComplete, security = false, invitationToken }: { onComplete: () => void; security?: boolean; invitationToken?: string }) {
   const [mode, setMode] = useState<Mode>('loading')
   const [initial, setInitial] = useState(false)
   const [username, setUsername] = useState('')
@@ -36,7 +36,7 @@ function AuthForm({ onComplete, security = false }: { onComplete: () => void; se
     try {
       const status = await api<Status>('/api/auth/status')
       setInitial(status.setupRequired)
-      if (status.isAuthenticated && !security && !status.pending) { await complete(); return }
+      if (status.isAuthenticated && !security && !status.pending && !invitationToken) { await complete(); return }
       setMode(status.pending === 'setup' || status.pending === 'rotate' || status.pending === 'login' ? status.pending : security ? 'security' : 'credentials')
     } catch (reason) { setError((reason as Error).message) }
   }
@@ -59,8 +59,8 @@ function AuthForm({ onComplete, security = false }: { onComplete: () => void; se
   const submit = async (event: FormEvent) => {
     event.preventDefault(); if (busy) return; setBusy(true); setError('')
     try {
-      const endpoint = mode === 'credentials' ? initial ? 'setup' : 'login' : mode === 'security' ? action : 'verify'
-      await handle(await api<Result>('/api/auth/' + endpoint, { method: 'POST', body: JSON.stringify({ username, password, newPassword, installationCode, code: code.replace(/[\s-]/g, '') }) }))
+      const endpoint = mode === 'credentials' ? invitationToken ? 'invitation' : initial ? 'setup' : 'login' : mode === 'security' ? action : 'verify'
+      await handle(await api<Result>('/api/auth/' + endpoint, { method: 'POST', body: JSON.stringify({ token: invitationToken, username, password, newPassword, installationCode, code: code.replace(/[\s-]/g, '') }) }))
     } catch (reason) { setError((reason as Error).message); setCode('') }
     finally { setBusy(false) }
   }
@@ -70,7 +70,7 @@ function AuthForm({ onComplete, security = false }: { onComplete: () => void; se
     catch (reason) { setError((reason as Error).message) }
     finally { setBusy(false) }
   }
-  const title = mode === 'loading' ? 'Comprobando acceso' : mode === 'credentials' ? initial ? 'Crea tu cuenta de facilitador' : 'Accede a tu espacio' : mode === 'login' ? 'Verifica tu identidad' : mode === 'recovery' ? 'Guarda tus códigos de recuperación' : mode === 'security' ? 'Protege tu cuenta' : 'Vincula tu aplicación autenticadora'
+  const title = mode === 'loading' ? 'Comprobando acceso' : mode === 'credentials' ? invitationToken ? 'Acepta tu invitación' : initial ? 'Crea la cuenta administradora' : 'Accede a tu espacio' : mode === 'login' ? 'Verifica tu identidad' : mode === 'recovery' ? 'Guarda tus códigos de recuperación' : mode === 'security' ? 'Protege tu cuenta' : 'Vincula tu aplicación autenticadora'
   const factor = <label>{recovery ? 'Código de recuperación' : 'Código de 6 dígitos'}<input name="code" autoComplete="one-time-code" inputMode={recovery ? 'text' : 'numeric'} value={code} onChange={e => setCode(e.target.value)} required maxLength={recovery ? 80 : 20} placeholder={recovery ? 'Código guardado al configurar la cuenta' : '000 000'} /></label>
   return <div className="local-auth-form">
     <div className="auth-mark"><ShieldCheck size={26} /><span>FrameIt · Acceso de facilitador</span></div>
@@ -85,13 +85,13 @@ function AuthForm({ onComplete, security = false }: { onComplete: () => void; se
       <button type="button" className="primary-button" disabled={!saved || busy} onClick={() => { setBusy(true); void complete().catch(reason => setError(reason.message)).finally(() => setBusy(false)) }}>Continuar</button>
     </> : <form onSubmit={event => void submit(event)}><fieldset disabled={busy}>
       {mode === 'credentials' && <>
-        <p>{initial ? 'Configura una contraseña y una segunda verificación con tu móvil. El código de instalación está disponible en el servidor de FrameIt.' : 'Introduce tu usuario y contraseña. Después te pediremos el código de tu aplicación autenticadora.'}</p>
-        {initial && <label>Código de instalación<input type="password" name="installationCode" autoComplete="off" value={installationCode} onChange={e => setInstallationCode(e.target.value)} required maxLength={128} /><small>El administrador puede consultarlo en el contenedor API. No es el código de tu autenticador.</small></label>}
-        <label>Usuario<input name="username" autoComplete="username" autoCapitalize="none" spellCheck={false} value={username} onChange={e => setUsername(e.target.value)} required minLength={initial ? 3 : 1} maxLength={64} /></label>
+        <p>{invitationToken ? 'Elige tu usuario y contraseña para unirte a la organización. Después activarás la verificación en dos pasos.' : initial ? 'Configura una contraseña y una segunda verificación con tu móvil. Utiliza el código de instalación facilitado por el administrador.' : 'Introduce tu usuario y contraseña. Después te pediremos el código de tu aplicación autenticadora.'}</p>
+        {initial && !invitationToken && <label>Código de instalación<input type="password" name="installationCode" autoComplete="off" value={installationCode} onChange={e => setInstallationCode(e.target.value)} required maxLength={128} /><small>Solo se utiliza para crear la primera cuenta. No es el código de tu autenticador.</small></label>}
+        <label>Usuario<input name="username" autoComplete="username" autoCapitalize="none" spellCheck={false} value={username} onChange={e => setUsername(e.target.value)} required minLength={initial || invitationToken ? 3 : 1} maxLength={64} /></label>
       </>}
       {(mode === 'credentials' || mode === 'security') && <>
         {mode === 'security' && <label>Qué quieres cambiar<select value={action} onChange={e => setAction(e.target.value)}><option value="password">Contraseña</option><option value="recovery">Códigos de recuperación</option><option value="rotate">Aplicación autenticadora</option></select></label>}
-        <label>{mode === 'security' ? 'Contraseña actual' : 'Contraseña'}<input name="password" type={showPassword ? 'text' : 'password'} autoComplete={initial ? 'new-password' : 'current-password'} value={password} onChange={e => setPassword(e.target.value)} required minLength={initial ? 12 : 1} maxLength={128} />{initial && <small>Al menos 12 caracteres. Puedes usar una frase larga.</small>}</label>
+        <label>{mode === 'security' ? 'Contraseña actual' : 'Contraseña'}<input name="password" type={showPassword ? 'text' : 'password'} autoComplete={initial || invitationToken ? 'new-password' : 'current-password'} value={password} onChange={e => setPassword(e.target.value)} required minLength={initial || invitationToken ? 12 : 1} maxLength={128} />{(initial || invitationToken) && <small>Al menos 12 caracteres. Puedes usar una frase larga.</small>}</label>
         <button type="button" className="auth-text-button" aria-pressed={showPassword} onClick={() => setShowPassword(!showPassword)}>{showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}</button>
         {mode === 'security' && action === 'password' && <label>Nueva contraseña<input name="newPassword" type="password" autoComplete="new-password" value={newPassword} onChange={e => setNewPassword(e.target.value)} required minLength={12} maxLength={128} /><small>Al menos 12 caracteres.</small></label>}
       </>}
@@ -107,10 +107,10 @@ function AuthForm({ onComplete, security = false }: { onComplete: () => void; se
         {(mode === 'login' || mode === 'security') && <button type="button" className="auth-text-button" onClick={() => { setRecovery(!recovery); setCode(''); setError('') }}>{recovery ? 'Usar la aplicación autenticadora' : 'Usar un código de recuperación'}</button>}
         {mode === 'security' && <p className="auth-hint">Confirma con tu contraseña y un código nuevo. Este cambio cerrará las otras sesiones cuando se complete.{action === 'recovery' ? ' Los códigos de recuperación anteriores dejarán de funcionar.' : ''}</p>}
       </>}
-      <button className="primary-button" type="submit" disabled={busy}>{busy ? 'Verificando…' : mode === 'credentials' ? initial ? 'Configurar autenticador' : 'Continuar' : mode === 'security' ? action === 'rotate' ? 'Configurar nuevo autenticador' : 'Confirmar cambio' : 'Verificar y continuar'}</button>
+      <button className="primary-button" type="submit" disabled={busy}>{busy ? 'Verificando…' : mode === 'credentials' ? initial || invitationToken ? 'Configurar autenticador' : 'Continuar' : mode === 'security' ? action === 'rotate' ? 'Configurar nuevo autenticador' : 'Confirmar cambio' : 'Verificar y continuar'}</button>
       {mode !== 'credentials' && mode !== 'security' && <button type="button" className="auth-text-button" disabled={busy} onClick={() => void restart()}>{mode === 'login' ? 'Usar otra cuenta' : 'Cancelar configuración'}</button>}
     </fieldset></form>}
-    {mode === 'credentials' && !initial && <details className="auth-help"><summary>¿No puedes acceder a tu cuenta?</summary><p>Si has perdido el autenticador, utiliza un código de recuperación en el siguiente paso. Si has olvidado la contraseña o tampoco tienes códigos, <a href="mailto:info@olatic.es">contacta con OLATIC</a> para solicitar ayuda con el restablecimiento.</p></details>}
+    {mode === 'credentials' && !initial && !invitationToken && <details className="auth-help"><summary>¿No puedes acceder a tu cuenta?</summary><p>Si has perdido el autenticador, utiliza un código de recuperación en el siguiente paso. Si has olvidado la contraseña o tampoco tienes códigos, <a href="mailto:info@olatic.es">contacta con OLATIC</a> para solicitar ayuda con el restablecimiento.</p></details>}
     <p className="privacy-notice">OLATIC gestiona tus datos de acceso para prestar y proteger el servicio. <Link to="/privacidad">Privacidad y derechos</Link> · <Link to="/cookies">Cookies técnicas</Link>.</p>
   </div>
 }
@@ -134,18 +134,20 @@ export function AuthGate({ children }: { children: ReactNode }) {
   return children
 }
 
-export function AuthPage() {
+export function AuthPage({ invitation = false }: { invitation?: boolean }) {
   const navigate = useNavigate()
   const route = useLocation()
+  const { auth, logout, error: logoutError } = useFacilitatorAuth()
+  const invitationToken = invitation ? new URLSearchParams(route.hash.slice(1)).get('token') ?? '' : undefined
   useEffect(() => { const title = document.title; document.title = 'Acceso de facilitadores · FrameIt'; return () => { document.title = title } }, [])
   const done = () => {
     const raw = new URLSearchParams(route.search).get('returnTo') ?? '/espacio'
     let target: URL
     try { target = new URL(raw, location.origin) } catch { target = new URL('/espacio', location.origin) }
-    const allowed = target.origin === location.origin && /^\/(?:$|espacio(?:\/|$)|clientes(?:\/|$)|sesiones(?:\/|$)|sesion\/|plantillas(?:\/|$)|disenador(?:\/|$)|seguridad(?:\/|$))/.test(target.pathname)
+    const allowed = target.origin === location.origin && /^\/(?:$|espacio(?:\/|$)|clientes(?:\/|$)|sesiones(?:\/|$)|sesion\/|plantillas(?:\/|$)|equipo(?:\/|$)|disenador(?:\/|$)|seguridad(?:\/|$))/.test(target.pathname)
     navigate(allowed ? target.pathname + target.search + target.hash : '/espacio', { replace: true })
   }
-  return <div className="auth-screen"><main className="auth-page"><Link to="/" className="brand-link" aria-label="FrameIt, inicio"><Brand /></Link><section className="auth-card">{new URLSearchParams(route.search).get('reason') === 'expired' && <p className="auth-session-notice" role="status">Tu sesión ha caducado o ya no es válida. Inicia sesión para continuar.</p>}<AuthForm onComplete={done} /></section><p className="auth-participant-link">¿Vienes a participar en un taller? <Link to="/join">Entrar con un código</Link></p><Link className="auth-home-link" to="/">Volver al inicio</Link></main><LegalFooter /></div>
+  return <div className="auth-screen"><main className="auth-page"><Link to="/" className="brand-link" aria-label="FrameIt, inicio"><Brand /></Link><section className="auth-card">{new URLSearchParams(route.search).get('reason') === 'expired' && <p className="auth-session-notice" role="status">Tu sesión ha caducado o ya no es válida. Inicia sesión para continuar.</p>}{invitation && !invitationToken ? <><h1>Invitación incompleta</h1><p>Abre el enlace completo que te ha enviado el administrador.</p></> : invitation && auth.isAuthenticated ? <><h1>Ya tienes una sesión abierta</h1><p>Para aceptar esta invitación, cierra tu sesión actual.</p>{logoutError && <p role="alert">{logoutError}</p>}<button className="primary-button" onClick={() => void logout()}>Cerrar sesión y aceptar invitación</button></> : <AuthForm key={invitationToken ?? 'login'} onComplete={done} invitationToken={invitationToken} />}</section><p className="auth-participant-link">¿Vienes a participar en un taller? <Link to="/join">Entrar con un código</Link></p><Link className="auth-home-link" to="/">Volver al inicio</Link></main><LegalFooter /></div>
 }
 
 export function SecurityPage() {

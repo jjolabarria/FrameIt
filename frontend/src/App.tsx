@@ -1,3 +1,4 @@
+import { TeamPage } from './pages/TeamPage'
 import { LegalPage } from './pages/LegalPage'
 import { JoinPage } from './pages/JoinPage'
 import { LandingPage } from './pages/LandingPage'
@@ -19,6 +20,8 @@ function App() {
       <Route path="/aviso-legal" element={<LegalPage kind="notice" />} />
       <Route path="/privacidad" element={<LegalPage kind="privacy" />} />
       <Route path="/cookies" element={<LegalPage kind="cookies" />} />
+      <Route path="/invitacion" element={<AuthPage invitation />} />
+      <Route path="/equipo" element={<AuthGate><TeamPage /></AuthGate>} />
       <Route path="/acceso" element={<AuthPage />} />
       <Route path="/seguridad" element={<AuthGate><SecurityPage /></AuthGate>} />
       <Route path="/" element={<LandingPage />} />

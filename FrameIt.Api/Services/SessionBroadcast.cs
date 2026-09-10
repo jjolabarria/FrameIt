@@ -8,7 +8,10 @@ namespace FrameIt.Api.Services;
 public static class SessionBroadcast
 {
     public static async Task<string[]> PrivateGroups(AppDbContext db, string code, CancellationToken cancellationToken = default)
-        => (await db.FacilitatorLoginSessions.Where(x => x.ExpiresAtUtc > DateTime.UtcNow).Select(x => x.Id).ToArrayAsync(cancellationToken))
+        => (await db.FacilitatorLoginSessions.Where(x => x.ExpiresAtUtc > DateTime.UtcNow &&
+                db.Users.Any(u => u.Id == x.UserId && u.TwoFactorEnabled && (u.IsPlatformAdmin || (u.OrganizationId != null &&
+                    db.WorkshopSessions.Any(s => s.AccessCode == code && s.Client!.OrganizationId == u.OrganizationId)))))
+            .Select(x => x.Id).ToArrayAsync(cancellationToken))
             .Select(id => SessionHub.FacilitatorGroup(code, id.ToString())).ToArray();
 
     public static async Task PublishSession(this IHubContext<SessionHub> hub, WorkshopSession session, string baseUrl, AppDbContext db,

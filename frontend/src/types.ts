@@ -24,7 +24,7 @@ export type QuestionOption = { id: string; label: string }
 export type QuestionRoundContext = { roundQuestionId: string | null; roundNumber: number | null; sectionTitle: string | null; roundTitle: string | null; phase: string; roundOpenedAtUtc: string | null; sessionElapsedSeconds: number | null; roundElapsedSeconds: number | null; sessionClockTracked: boolean }
 export type SessionQuestionItem = { id: string; participantName: string; question: string; createdAtUtc: string; roundContext?: QuestionRoundContext | null }
 export type SessionAttachment = { id: string; fileName: string; contentType: string; sizeBytes: number; uploadedBy: string; url: string; uploadedAtUtc: string }
-export type FacilitatorAuthState = { isAuthenticated: boolean; name?: string | null }
+export type FacilitatorAuthState = { isAuthenticated: boolean; name?: string | null; isAdmin?: boolean; organizationId?: string | null; organizationName?: string | null }
 
 export type SessionSnapshot = {
   updatedAtUtc: string

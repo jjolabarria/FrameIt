@@ -1,0 +1,14 @@
+.team-forms { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; }
+.team-forms section, .team-list, .team-invite-result { padding-block: 24px; border-top: 1px solid var(--line-strong); }
+.team-forms h2, .team-list h2, .team-invite-result h2 { font-size: 1.25rem; margin-bottom: 16px; }
+.team-forms form { display: grid; gap: 16px; margin-top: 16px; }
+.team-forms label, .team-invite-result label, .organization-scope label { display: grid; gap: 8px; font-size: .875rem; }
+.team-forms input, .team-forms select, .team-invite-result input, .organization-scope select { width: 100%; min-height: 44px; padding: 10px; border: 1px solid var(--line-strong); border-radius: 6px; font: inherit; background: var(--panel); color: var(--ink); }
+.team-list article { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; padding-block: 16px; border-bottom: 1px solid var(--line); }
+.team-list article p, .team-list small, .organization-scope small { color: var(--ink-soft); }
+.team-invite-result { background: var(--wash); padding: 24px; margin-block: 24px; }
+.team-invite-result label { margin-block: 16px; }
+.organization-scope { max-width: 320px; }
+.organization-scope small { display: block; font-size: .75rem; margin-top: 6px; }
+.organization-label { font-size: .875rem; color: var(--brand-green); }
+@media(max-width: 720px) { .team-forms { grid-template-columns: 1fr; gap: 8px; } .organization-scope { width: 100%; max-width: none; } }

@@ -1,6 +1,10 @@
 # Autenticación local del facilitador
 
-Una cuenta local inicial, contraseña y TOTP obligatorio. Los participantes siguen entrando por el enlace o QR de sesión. No hay registro público ni acceso simulado. No se crea una cuenta real durante el despliegue.
+La cuenta creada con el código de instalación administra toda la plataforma. Puede crear organizaciones e invitar a facilitadores desde Equipo. Cada facilitador pertenece a una organización y solo accede a sus clientes, proyectos, talleres y plantillas propias; las plantillas incorporadas son compartidas. Todas las cuentas requieren contraseña y TOTP. Los participantes siguen entrando por el enlace o QR de sesión. No hay registro público ni acceso simulado. No se crea una cuenta real durante el despliegue.
+
+El administrador consulta todas las organizaciones y selecciona una para crear clientes o plantillas. Las invitaciones se comparten manualmente mediante un enlace de un solo uso que caduca a los siete días; la aplicación no envía correos. Pueden revocarse mientras estén pendientes. La aceptación exige elegir usuario, contraseña y activar TOTP antes de conceder acceso. El token se guarda como hash y el enlace se muestra únicamente al crearlo.
+
+La migración conserva la cuenta inicial como administradora y asigna los datos existentes a OLATIC. El restablecimiento administrativo descrito abajo elimina todas las cuentas, invitaciones y sesiones de autenticación, conservando los datos de trabajo y las organizaciones.
 
 ## Acceso al backoffice
 
@@ -15,7 +19,9 @@ Validación del 10/09/2026: TypeScript, build con Node 24 y lint correctos; prue
 ## Primer acceso local
 
 1. Abrir http://localhost:8080/acceso.
-2. En una terminal del administrador, desde la raíz del proyecto, consultar el código de instalación:
+2. Si has configurado `FRAMEIT_BOOTSTRAP_TOKEN` en `.env` o en **Environment** de Dokploy, utiliza ese valor como código de instalación. Debe contener entre 32 y 128 caracteres aleatorios, sin espacios. Guarda las variables y vuelve a desplegar para aplicarlo.
+
+   Si dejas la variable vacía, la API genera y conserva un código automáticamente. En ese caso, el administrador puede consultarlo desde la raíz del proyecto:
 
 ```powershell
 docker compose exec api cat /app/auth-state/bootstrap-token
@@ -26,6 +32,10 @@ docker compose exec api cat /app/auth-state/bootstrap-token
 5. Mostrar y guardar los diez códigos de recuperación. Cada código es de un solo uso y requiere también la contraseña.
 
 No compartir el código de instalación, QR, clave manual ni códigos de recuperación. El código de instalación deja de permitir altas en cuanto se activa la cuenta. Un alta incompleta se retoma durante 15 minutos en el mismo navegador; con el código de instalación se puede reiniciar antes de la activación.
+
+La variable de Compose se transmite como `LocalAuth__BootstrapToken` a la API. Tiene prioridad sobre cualquier archivo `bootstrap-token` existente y no se copia a ese archivo ni se registra en logs. Sin variable, se conserva el funcionamiento anterior. Tras activar la cuenta con TOTP puedes quitarla del entorno: no es una contraseña de acceso ni un mecanismo de recuperación, y cambiarla no permite crear otra cuenta. El restablecimiento explícito del administrador conserva la prioridad de la variable si sigue definida; sin ella, genera un código nuevo.
+
+La plantilla `.env.example` deja el valor vacío. Nunca guardes el código real en Git. El contenido de las variables puede ser consultado por administradores del contenedor; para validar el Compose sin imprimirlas utiliza `docker compose config --quiet`.
 
 ## Acceso y seguridad
 

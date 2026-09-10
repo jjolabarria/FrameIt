@@ -8,7 +8,11 @@ namespace FrameIt.Api.Data;
 
 public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbContext<FacilitatorUser, IdentityRole<Guid>, Guid>(options)
 {
+    public bool OrganizationScopeEnabled { get; set; }
+    public Guid? CurrentOrganizationId { get; set; }
+    public DbSet<Organization> Organizations => Set<Organization>();
     public DbSet<FacilitatorLoginSession> FacilitatorLoginSessions => Set<FacilitatorLoginSession>();
+    public DbSet<FacilitatorInvitation> FacilitatorInvitations => Set<FacilitatorInvitation>();
     public DbSet<AuthChallenge> AuthChallenges => Set<AuthChallenge>();
     public DbSet<FacilitatorRecoveryCode> FacilitatorRecoveryCodes => Set<FacilitatorRecoveryCode>();
     public DbSet<Client> Clients => Set<Client>();
@@ -24,6 +28,30 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+        modelBuilder.Entity<Organization>().Property(x => x.Name).HasMaxLength(160);
+        modelBuilder.Entity<Organization>().HasData(new Organization { Id = Organization.DefaultId, Name = "OLATIC" });
+        modelBuilder.Entity<Client>().HasQueryFilter(x => !OrganizationScopeEnabled || (CurrentOrganizationId != null && x.OrganizationId == CurrentOrganizationId));
+        modelBuilder.Entity<Project>().HasQueryFilter(x => !OrganizationScopeEnabled || (CurrentOrganizationId != null && x.Client!.OrganizationId == CurrentOrganizationId));
+        modelBuilder.Entity<WorkshopSession>().HasQueryFilter(x => !OrganizationScopeEnabled || (CurrentOrganizationId != null && x.Client!.OrganizationId == CurrentOrganizationId));
+        modelBuilder.Entity<DynamicTemplate>().HasQueryFilter(x => !OrganizationScopeEnabled || x.IsBuiltIn || (CurrentOrganizationId != null && x.OrganizationId == CurrentOrganizationId));
+        modelBuilder.Entity<TemplateSection>().HasQueryFilter(x => !OrganizationScopeEnabled || x.DynamicTemplate!.IsBuiltIn || (CurrentOrganizationId != null && x.DynamicTemplate!.OrganizationId == CurrentOrganizationId));
+        modelBuilder.Entity<TemplateQuestion>().HasQueryFilter(x => !OrganizationScopeEnabled || x.TemplateSection!.DynamicTemplate!.IsBuiltIn || (CurrentOrganizationId != null && x.TemplateSection!.DynamicTemplate!.OrganizationId == CurrentOrganizationId));
+        modelBuilder.Entity<SessionSection>().HasQueryFilter(x => !OrganizationScopeEnabled || (CurrentOrganizationId != null && x.WorkshopSession!.Client!.OrganizationId == CurrentOrganizationId));
+        modelBuilder.Entity<SessionQuestion>().HasQueryFilter(x => !OrganizationScopeEnabled || (CurrentOrganizationId != null && x.SessionSection!.WorkshopSession!.Client!.OrganizationId == CurrentOrganizationId));
+        modelBuilder.Entity<SessionParticipant>().HasQueryFilter(x => !OrganizationScopeEnabled || (CurrentOrganizationId != null && x.WorkshopSession!.Client!.OrganizationId == CurrentOrganizationId));
+        modelBuilder.Entity<QuestionResponse>().HasQueryFilter(x => !OrganizationScopeEnabled || (CurrentOrganizationId != null && x.SessionQuestion!.SessionSection!.WorkshopSession!.Client!.OrganizationId == CurrentOrganizationId));
+        modelBuilder.Entity<SessionOutcome>().HasQueryFilter(x => !OrganizationScopeEnabled || (CurrentOrganizationId != null && x.WorkshopSession!.Client!.OrganizationId == CurrentOrganizationId));
+        modelBuilder.Entity<SessionAttachment>().HasQueryFilter(x => !OrganizationScopeEnabled || (CurrentOrganizationId != null && x.WorkshopSession!.Client!.OrganizationId == CurrentOrganizationId));
+        modelBuilder.Entity<ParticipantQuestion>().HasQueryFilter(x => !OrganizationScopeEnabled || (CurrentOrganizationId != null && x.WorkshopSession!.Client!.OrganizationId == CurrentOrganizationId));
+        modelBuilder.Entity<SessionSatisfactionResponse>().HasQueryFilter(x => !OrganizationScopeEnabled || (CurrentOrganizationId != null && x.WorkshopSession!.Client!.OrganizationId == CurrentOrganizationId));
+        modelBuilder.Entity<FacilitatorInvitation>(entity =>
+        {
+            entity.Property(x => x.Email).HasMaxLength(254);
+            entity.Property(x => x.TokenHash).HasMaxLength(64);
+            entity.HasIndex(x => x.TokenHash).IsUnique();
+            entity.HasIndex(x => x.ExpiresAtUtc);
+            entity.HasOne<FacilitatorUser>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.SetNull);
+        });
         modelBuilder.Entity<FacilitatorLoginSession>().HasIndex(x => x.ExpiresAtUtc);
         modelBuilder.Entity<AuthChallenge>().HasIndex(x => x.ExpiresAtUtc);
         modelBuilder.Entity<Client>(entity =>
@@ -43,7 +71,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
         {
             entity.Property(x => x.Key).HasMaxLength(80);
             entity.Property(x => x.Title).HasMaxLength(200);
-            entity.HasIndex(x => x.Key).IsUnique();
+            entity.HasIndex(x => new { x.OrganizationId, x.Key }).IsUnique();
         });
 
         modelBuilder.Entity<TemplateQuestion>(entity =>

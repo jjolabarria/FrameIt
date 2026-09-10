@@ -2,6 +2,9 @@ export async function api<T>(url: string, init?: RequestInit): Promise<T> {
 
   const publicSession = /^\/(join|proyeccion)(\/|$)/i.test(window.location.pathname)
   const headers = new Headers(init?.headers)
+  if (!publicSession && !url.startsWith('/api/auth/')) {
+    try { const organization = sessionStorage.getItem('frameit.admin-organization'); if (organization) headers.set('X-FrameIt-Organization', organization) } catch { /* Session storage is optional. */ }
+  }
 
   if (!(init?.body instanceof FormData)) headers.set('Content-Type', 'application/json')
 

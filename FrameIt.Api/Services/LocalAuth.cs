@@ -16,12 +16,13 @@ namespace FrameIt.Api.Services;
 
 public sealed record AuthInput(string? Username, string? Password, string? Code, string? InstallationCode, string? NewPassword);
 
-public sealed class LocalAuth(AppDbContext db, UserManager<FacilitatorUser> users, IDataProtectionProvider protection, IConfiguration config, IWebHostEnvironment environment)
+public sealed partial class LocalAuth(AppDbContext db, UserManager<FacilitatorUser> users, IDataProtectionProvider protection, IConfiguration config, IWebHostEnvironment environment)
 {
     public const string SessionClaim = "frameit-session";
     private const string PendingCookie = "frameit.pending.v1";
     private readonly IDataProtector protector = protection.CreateProtector("FrameIt.LocalAuth.Totp.v1");
     private string BootstrapFile => Path.Combine(config["LocalAuth:BootstrapDirectory"] ?? Path.Combine(environment.ContentRootPath, ".local-auth"), "bootstrap-token");
+    private BootstrapTokenStore Bootstrap => new(BootstrapFile, config["LocalAuth:BootstrapToken"]);
     private static string RandomToken() => Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
     private static string Hash(string value) => Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(value)));
     private static string NormalizeCode(string? value) => (value ?? "").Replace(" ", "").Replace("-", "").Trim().ToUpperInvariant();
@@ -34,18 +35,14 @@ public sealed class LocalAuth(AppDbContext db, UserManager<FacilitatorUser> user
         await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(741926301)");
         if (reset)
         {
+            await db.FacilitatorInvitations.ExecuteDeleteAsync();
             await db.FacilitatorLoginSessions.ExecuteDeleteAsync();
             await db.AuthChallenges.ExecuteDeleteAsync();
             await db.FacilitatorRecoveryCodes.ExecuteDeleteAsync();
             await db.Users.ExecuteDeleteAsync();
         }
         if (await db.Users.AnyAsync(x => x.TwoFactorEnabled)) return;
-        Directory.CreateDirectory(Path.GetDirectoryName(BootstrapFile)!);
-        if (reset || !File.Exists(BootstrapFile))
-        {
-            await File.WriteAllTextAsync(BootstrapFile, RandomToken());
-            if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(BootstrapFile, UnixFileMode.UserRead | UnixFileMode.UserWrite);
-        }
+        await Bootstrap.EnsureAsync(reset);
         await transaction.CommitAsync();
     }
 
@@ -83,13 +80,13 @@ public sealed class LocalAuth(AppDbContext db, UserManager<FacilitatorUser> user
     public async Task<IResult> Setup(HttpContext http, AuthInput input)
     {
         if (await db.Users.AnyAsync(x => x.TwoFactorEnabled)) return Results.Conflict(new { message = "La cuenta de facilitador ya está configurada." });
-        var bootstrap = File.Exists(BootstrapFile) ? (await File.ReadAllTextAsync(BootstrapFile)).Trim() : "";
+        var bootstrap = await Bootstrap.ReadAsync();
         if (bootstrap.Length == 0 || !CryptographicOperations.FixedTimeEquals(System.Text.Encoding.UTF8.GetBytes(Hash(input.InstallationCode?.Trim() ?? "")), System.Text.Encoding.UTF8.GetBytes(Hash(bootstrap)))) return Invalid();
         if (string.IsNullOrWhiteSpace(input.Username) || input.Username.Length is < 3 or > 64 || input.Password?.Length is not (>= 12 and <= 128)) return Results.BadRequest(new { message = "Usa un usuario de 3–64 caracteres y una contraseña de 12–128 caracteres." });
         // Only the installation code can replace an incomplete first enrollment.
         await db.AuthChallenges.ExecuteDeleteAsync();
         await db.Users.Where(x => !x.TwoFactorEnabled).ExecuteDeleteAsync();
-        var user = new FacilitatorUser { Id = Guid.NewGuid(), UserName = input.Username.Trim(), LockoutEnabled = true };
+        var user = new FacilitatorUser { Id = Guid.NewGuid(), UserName = input.Username.Trim(), LockoutEnabled = true, IsPlatformAdmin = true };
         var created = await users.CreateAsync(user, input.Password);
         if (!created.Succeeded) return Results.BadRequest(new { message = "El usuario debe contener letras, números o los símbolos . _ - @ +. Revisa también la contraseña." });
         var secret = protector.Protect(Base32Encoding.ToString(RandomNumberGenerator.GetBytes(20)));
@@ -178,6 +175,7 @@ public sealed class LocalAuth(AppDbContext db, UserManager<FacilitatorUser> user
         if (pending?.ProtectedSecret is null) return Invalid();
         var user = await users.FindByIdAsync(pending.UserId.ToString());
         if (user is null || await users.IsLockedOutAsync(user)) return Invalid();
+        if (pending.Purpose == "setup" && !await CanCompleteEnrollment(user)) return Invalid();
         var secret = protector.Unprotect(pending.ProtectedSecret);
         var uri = $"otpauth://totp/{Uri.EscapeDataString("FrameIt:" + user.UserName)}?secret={secret}&issuer=FrameIt&algorithm=SHA1&digits=6&period=30";
         using var qrData = QRCodeGenerator.GenerateQrCode(uri, QRCodeGenerator.ECCLevel.Q);
@@ -191,6 +189,7 @@ public sealed class LocalAuth(AppDbContext db, UserManager<FacilitatorUser> user
         if (pending is null) return Invalid();
         var user = await users.FindByIdAsync(pending.UserId.ToString());
         if (user is null || await users.IsLockedOutAsync(user)) return Invalid();
+        if (pending.Purpose == "setup" && !await CanCompleteEnrollment(user)) return Invalid();
         if (pending.Purpose == "login")
         {
             if (!user.TwoFactorEnabled || !await Factor(user, input.Code)) return Invalid();
@@ -205,6 +204,11 @@ public sealed class LocalAuth(AppDbContext db, UserManager<FacilitatorUser> user
         user.ProtectedTotpSecret = pending.ProtectedSecret;
         user.LastTotpTimeStep = step;
         user.TwoFactorEnabled = true;
+        if (pending.Purpose == "setup" && !user.IsPlatformAdmin)
+        {
+            var invitation = await db.FacilitatorInvitations.SingleAsync(x => x.UserId == user.Id);
+            invitation.AcceptedAtUtc = DateTime.UtcNow;
+        }
         await users.UpdateAsync(user);
         await users.ResetAccessFailedCountAsync(user);
         await users.UpdateSecurityStampAsync(user);
@@ -295,6 +299,24 @@ public static class LocalAuthEndpoints
         app.Use(async (http, next) =>
         {
             var authPath = http.Request.Path.StartsWithSegments("/api/auth");
+            if (http.User.Identity?.IsAuthenticated == true && http.GetEndpoint()?.Metadata.GetMetadata<IAuthorizeData>() is not null)
+            {
+                var db = http.RequestServices.GetRequiredService<AppDbContext>();
+                var userId = Guid.Parse(http.User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var user = await db.Users.SingleAsync(x => x.Id == userId);
+                if (!user.IsPlatformAdmin)
+                {
+                    db.OrganizationScopeEnabled = true;
+                    db.CurrentOrganizationId = user.OrganizationId;
+                }
+                else if (!authPath && http.Request.Headers.TryGetValue("X-FrameIt-Organization", out var organization))
+                {
+                    if (!Guid.TryParse(organization, out var organizationId) || !await db.Organizations.AnyAsync(x => x.Id == organizationId))
+                    { http.Response.StatusCode = 400; await http.Response.WriteAsJsonAsync(new { message = "La organización seleccionada no existe." }); return; }
+                    db.OrganizationScopeEnabled = true;
+                    db.CurrentOrganizationId = organizationId;
+                }
+            }
             if (authPath || http.User.Identity?.IsAuthenticated == true) http.Response.Headers.CacheControl = "no-store";
             if (http.Request.Path.StartsWithSegments("/hubs/session") && http.Request.Headers.Origin.Count > 0)
             {
@@ -313,7 +335,8 @@ public static class LocalAuthEndpoints
         });
         var auth = app.MapGroup("/api/auth");
         auth.MapGet("/csrf", (HttpContext http, IAntiforgery antiforgery) => Results.Ok(new { token = antiforgery.GetAndStoreTokens(http).RequestToken }));
-        auth.MapGet("/me", (HttpContext http) => Results.Ok(new { isAuthenticated = http.User.Identity?.IsAuthenticated == true, name = http.User.Identity?.Name }));
+        auth.MapGet("/me", (HttpContext http, LocalAuth service) => service.Me(http));
+        auth.MapGet("/team", (HttpContext http, LocalAuth service) => service.Team(http)).RequireAuthorization();
         auth.MapGet("/status", (HttpContext http, LocalAuth service) => service.Status(http));
         auth.MapGet("/enrollment", (HttpContext http, LocalAuth service) => service.Enrollment(http)).RequireRateLimiting("local-auth");
         // Serialize mutations across API instances, including failed-attempt counters and single-use factors.
@@ -327,6 +350,10 @@ public static class LocalAuthEndpoints
             return result;
         });
         mutations.MapPost("/setup", (HttpContext http, AuthInput input, LocalAuth service) => service.Setup(http, input));
+        mutations.MapPost("/invitations", (HttpContext http, CreateInvitationInput input, LocalAuth service) => service.CreateInvitation(http, input)).RequireAuthorization();
+        mutations.MapPost("/organizations", (HttpContext http, CreateOrganizationInput input, LocalAuth service) => service.CreateOrganization(http, input)).RequireAuthorization();
+        mutations.MapPost("/invitations/{id:guid}/revoke", (HttpContext http, Guid id, LocalAuth service) => service.RevokeInvitation(http, id)).RequireAuthorization();
+        mutations.MapPost("/invitation", (HttpContext http, AcceptInvitationInput input, LocalAuth service) => service.AcceptInvitation(http, input));
         mutations.MapPost("/login", (HttpContext http, AuthInput input, LocalAuth service) => service.Login(http, input));
         mutations.MapPost("/verify", (HttpContext http, AuthInput input, LocalAuth service) => service.Verify(http, input));
         mutations.MapPost("/cancel", (HttpContext http, LocalAuth service) => service.Cancel(http));
