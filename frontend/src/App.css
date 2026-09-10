@@ -231,6 +231,10 @@ input[type=radio] { accent-color: var(--accent-strong); width: 18px; height: 18p
 .participant-results { border-top: 1px solid var(--line); padding-top: 1.4rem; margin-top: 1.4rem; }
 .participant-results h2 { font-size: 1.1rem; }
 .join-surface { padding: clamp(2rem, 8vh, 5rem) .5rem; display: grid; gap: 1rem; }
+.session-closing-surface { position: relative; overflow: hidden; isolation: isolate; }
+.session-closing-surface > :not(.session-confetti), .projection-closing > :not(.session-confetti) { position: relative; z-index: 1; }
+.session-confetti { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
+.session-confetti-piece { --confetti-color: #d79a3b; --confetti-x: 0vw; --confetti-rotation: 0deg; --confetti-delay: 0ms; position: absolute; left: 50%; top: -1.5rem; width: .55rem; height: .9rem; background: var(--confetti-color); opacity: 0; transform: translate3d(0, -1rem, 0) rotate(0deg); animation: session-confetti-fall 1.7s var(--confetti-delay) cubic-bezier(.22, 1, .36, 1) forwards; }
 .join-surface h1 { font-size: clamp(2rem, 7vw, 3.2rem); max-width: 18ch; line-height: 1.12; }
 .join-subtitle { color: var(--ink-soft); }
 .join-form { margin-top: 1.1rem; }
@@ -282,7 +286,10 @@ input[type=radio] { accent-color: var(--accent-strong); width: 18px; height: 18p
 .projection-pagination button { font-size: 18px; }
 .projection-pagination > span { font-size: 20px; color: var(--ink-soft); }
 .projection-closing { display: grid; gap: 2rem; align-content: center; min-height: 65vh; }
+.projection-closing { position: relative; overflow: hidden; isolation: isolate; }
 .projection-closing > p:not(.section-label) { font-size: 24px; color: var(--ink-soft); }
+@keyframes session-confetti-fall { 0% { opacity: 0; transform: translate3d(0, -1rem, 0) rotate(0deg); } 12% { opacity: 1; } 100% { opacity: 0; transform: translate3d(var(--confetti-x), 72vh, 0) rotate(var(--confetti-rotation)); } }
+@media (prefers-reduced-motion: reduce) { .session-confetti { display: none; } }
 .projection-rating-scale { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: 1.2rem; }
 .projection-rating-scale > div { display: grid; gap: .6rem; border-top: 2px solid var(--line); padding-top: 1rem; }
 .projection-rating-scale strong { font-family: var(--font-display); font-size: 48px; }

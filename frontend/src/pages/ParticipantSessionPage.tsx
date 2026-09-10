@@ -10,6 +10,7 @@ import { useSessionLive } from '../hooks/useSessionLive'
 import { ConnectionNotice, Disclosure, ErrorNotice, PhaseBadge } from '../components/SessionUI'
 import type { SessionSnapshot } from '../types'
 import { QuestionContext } from '../components/QuestionContext'
+import { SessionConfetti } from '../components/SessionConfetti'
 
 type Identity = { id: string; alias: string; sessionId: string; confirmedAt: string }
 const ratings = ['Muy mala', 'Mejorable', 'Correcta', 'Buena', 'Excelente']
@@ -185,7 +186,7 @@ function ParticipantSession({ code }: { code: string }) {
     {!snapshot && error && <Link className="secondary-button" to="/join">Introducir otro código</Link>}
     {!snapshot && !error && <div className="loading-state" role="status">Buscando tu sesión…</div>}
     {snapshot?.isArchived && <section className="join-surface"><h1>Sesión archivada</h1><p>Esta sesión está en consulta y no admite participación. Contacta con el facilitador si necesitas retomarla.</p><Link className="secondary-button" to="/join">Entrar en otra sesión</Link></section>}
-    {snapshot && !snapshot.isArchived && closed && <section className="join-surface"><p className="section-label">{snapshot.title}</p><h1>Sesión finalizada</h1><p>Gracias por participar. La valoración está cerrada y ya no se admiten envíos.</p><Link className="secondary-button" to="/join">Entrar en otra sesión</Link></section>}
+    {snapshot && !snapshot.isArchived && closed && <section className="join-surface session-closing-surface"><SessionConfetti /><p className="section-label">{snapshot.title}</p><h1>Sesión finalizada</h1><p>Gracias por participar. La valoración está cerrada y ya no se admiten envíos.</p><Link className="secondary-button" to="/join">Entrar en otra sesión</Link></section>}
     {snapshot && !snapshot.isArchived && !closed && <>
       {!validIdentity ? <section className="join-surface"><p className="section-label">Te damos la bienvenida</p><h1>{snapshot.title}</h1><p className="join-subtitle">{snapshot.templateTitle}</p>
         {removed && <p className="error-banner" role="alert">El facilitador te ha sacado de la sesión. Consulta con él antes de volver a entrar.</p>}
