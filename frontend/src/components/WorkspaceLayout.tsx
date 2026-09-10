@@ -1,10 +1,11 @@
+import { UserMenu } from './UserMenu'
 import { OrganizationScope } from './OrganizationScope'
 import { Brand } from './Brand'
 import type { ReactNode } from 'react'
 
 import { Link, NavLink } from 'react-router-dom'
 
-import { ShieldCheck, UsersRound, UserRound, Building2, LayoutDashboard, Library, Radio, Search } from 'lucide-react'
+import { UsersRound, UserRound, Building2, LayoutDashboard, Library, Radio, Search } from 'lucide-react'
 
 import { useFacilitatorAuth } from '../hooks/useFacilitatorAuth'
 
@@ -99,15 +100,7 @@ export function WorkspaceLayout({ children, title, eyebrow = 'FrameIt', descript
 
           {auth.isAuthenticated ? <>
             <OrganizationScope />
-            <details className="user-settings" onKeyDown={event => {
-              if (event.key === 'Escape') { event.currentTarget.open = false; event.currentTarget.querySelector('summary')?.focus() }
-            }}>
-              <summary><UserRound size={18} /><span>{auth.name ?? 'Facilitador'}</span></summary>
-              <nav aria-label="Configuración del usuario">
-                <NavLink className={({ isActive }) => `workspace-nav-link ${isActive ? 'workspace-nav-link--active' : ''}`} to="/configuracion/seguridad"><ShieldCheck size={16} /><span>Seguridad</span></NavLink>
-                <button className="secondary-button" disabled={busy} onClick={() => void logout()} type="button">Cerrar sesión</button>
-              </nav>
-            </details>
+            <UserMenu name={auth.name ?? 'Facilitador'} busy={busy} onLogout={() => void logout()} />
           </> : <><div className="operator-chip"><UserRound size={16} /><span>Sin acceso</span></div><button className="secondary-button" disabled={busy} onClick={() => void login()} type="button">Entrar</button></>}
 
           {error ? <p role="alert" className="micro-error">{error}</p> : null}
