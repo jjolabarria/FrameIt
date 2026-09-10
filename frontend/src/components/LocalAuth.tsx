@@ -1,7 +1,8 @@
 import { Brand } from './Brand'
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { ShieldCheck, X } from 'lucide-react'
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
+import { ShieldCheck } from 'lucide-react'
+import { LegalFooter } from './LegalFooter'
 import { api } from '../lib/api'
 import { publishAuth, useFacilitatorAuth } from '../hooks/useFacilitatorAuth'
 import { WorkspaceLayout } from './WorkspaceLayout'
@@ -12,7 +13,7 @@ type Status = { setupRequired: boolean; pending?: string; isAuthenticated: boole
 type Result = { step?: string; recoveryCodes?: string[]; complete?: boolean }
 type Mode = 'loading' | 'credentials' | 'setup' | 'login' | 'rotate' | 'recovery' | 'security'
 
-function AuthForm({ onComplete, security = false, onGuardChange }: { onComplete: () => void; security?: boolean; onGuardChange?: (guarded: boolean) => void }) {
+function AuthForm({ onComplete, security = false }: { onComplete: () => void; security?: boolean }) {
   const [mode, setMode] = useState<Mode>('loading')
   const [initial, setInitial] = useState(false)
   const [username, setUsername] = useState('')
@@ -41,9 +42,11 @@ function AuthForm({ onComplete, security = false, onGuardChange }: { onComplete:
   }
   const [initialLoad] = useState(() => load)
   useEffect(() => { void initialLoad() }, [initialLoad])
-  useEffect(() => { heading.current?.focus(); onGuardChange?.(mode === 'recovery' || busy) }, [mode, busy, onGuardChange])
+  useEffect(() => { heading.current?.focus() }, [mode])
   const complete = async () => {
-    publishAuth(await api<FacilitatorAuthState>('/api/auth/me'))
+    const state = await api<FacilitatorAuthState>('/api/auth/me')
+    if (!state.isAuthenticated) throw new Error('No se pudo confirmar el acceso. Vuelve a iniciar sesión.')
+    publishAuth(state)
     setCodes([]); setEnrollment(null); setPassword(''); setCode('')
     onComplete()
   }
@@ -71,7 +74,6 @@ function AuthForm({ onComplete, security = false, onGuardChange }: { onComplete:
   const factor = <label>{recovery ? 'Código de recuperación' : 'Código de 6 dígitos'}<input name="code" autoComplete="one-time-code" inputMode={recovery ? 'text' : 'numeric'} value={code} onChange={e => setCode(e.target.value)} required maxLength={recovery ? 80 : 20} placeholder={recovery ? 'Código guardado al configurar la cuenta' : '000 000'} /></label>
   return <div className="local-auth-form">
     <div className="auth-mark"><ShieldCheck size={26} /><span>FrameIt · Acceso de facilitador</span></div>
-    <p className="privacy-notice">OLATIC gestiona tus datos de acceso para prestar y proteger el servicio. <Link to="/privacidad">Privacidad y derechos</Link> · <Link to="/cookies">Cookies técnicas</Link>.</p>
     <h1 ref={heading} tabIndex={-1}>{title}</h1>
     {error && <p role="alert" className="auth-error">{error}</p>}
     {mode === 'loading' ? <><p>Comprobando la configuración de acceso…</p>{error && <button className="secondary-button" onClick={() => void load()}>Reintentar</button>}</> : mode === 'recovery' ? <>
@@ -108,45 +110,42 @@ function AuthForm({ onComplete, security = false, onGuardChange }: { onComplete:
       <button className="primary-button" type="submit" disabled={busy}>{busy ? 'Verificando…' : mode === 'credentials' ? initial ? 'Configurar autenticador' : 'Continuar' : mode === 'security' ? action === 'rotate' ? 'Configurar nuevo autenticador' : 'Confirmar cambio' : 'Verificar y continuar'}</button>
       {mode !== 'credentials' && mode !== 'security' && <button type="button" className="auth-text-button" disabled={busy} onClick={() => void restart()}>{mode === 'login' ? 'Usar otra cuenta' : 'Cancelar configuración'}</button>}
     </fieldset></form>}
-    {mode === 'credentials' && !initial && <p className="auth-hint">Si has perdido la contraseña y el acceso, contacta con el administrador del servidor para restablecer la cuenta local.</p>}
+    {mode === 'credentials' && !initial && <details className="auth-help"><summary>¿No puedes acceder a tu cuenta?</summary><p>Si has perdido el autenticador, utiliza un código de recuperación en el siguiente paso. Si has olvidado la contraseña o tampoco tienes códigos, <a href="mailto:info@olatic.es">contacta con OLATIC</a> para solicitar ayuda con el restablecimiento.</p></details>}
+    <p className="privacy-notice">OLATIC gestiona tus datos de acceso para prestar y proteger el servicio. <Link to="/privacidad">Privacidad y derechos</Link> · <Link to="/cookies">Cookies técnicas</Link>.</p>
   </div>
 }
 
-export function AuthDialog() {
-  const ref = useRef<HTMLDialogElement>(null)
-  const [opened, setOpened] = useState(false)
-  const [required, setRequired] = useState(false)
-  const [guarded, setGuarded] = useState(false)
-  const trigger = useRef<HTMLElement | null>(null)
-  const { logout, error: logoutError } = useFacilitatorAuth()
-  useEffect(() => {
-    const open = (event: Event) => { trigger.current = document.activeElement as HTMLElement; setRequired(event.type === 'frameit-auth-required'); setOpened(true) }
-    window.addEventListener('frameit-open-auth', open); window.addEventListener('frameit-auth-required', open)
-    return () => { window.removeEventListener('frameit-open-auth', open); window.removeEventListener('frameit-auth-required', open) }
-  }, [])
-  useEffect(() => { if (opened && !ref.current?.open) ref.current?.showModal() }, [opened])
-  const close = () => { ref.current?.close(); setOpened(false); setGuarded(false); trigger.current?.focus() }
-  return <dialog ref={ref} className="local-auth-dialog" aria-label="Acceso de facilitador" onCancel={event => { if (required || guarded) event.preventDefault(); else close() }}>
-    {opened && <>{!required && <button className="auth-close" type="button" aria-label="Cerrar acceso" disabled={guarded} onClick={close}><X size={20} /></button>}<AuthForm onComplete={close} onGuardChange={setGuarded} />{required && <><button className="auth-text-button" disabled={guarded} onClick={() => void logout().then(success => { if (success) close() })}>Cerrar sesión y salir del espacio</button>{logoutError && <p className="auth-error" role="alert">{logoutError}</p>}</>}</>}
-  </dialog>
-}
-
 export function AuthGate({ children }: { children: ReactNode }) {
-  const { auth, busy, error, login, refresh } = useFacilitatorAuth()
-  if (auth.isAuthenticated) return children
-  return <WorkspaceLayout title="Tu espacio de facilitación" description="Clientes, proyectos y sesiones en un espacio protegido."><div className="auth-entry"><ShieldCheck size={36} /><h2>{busy ? 'Comprobando acceso…' : 'Entra para continuar'}</h2><p>Accede con tu cuenta local y tu aplicación autenticadora.</p>{error && <p role="alert">{error}</p>}<button className="primary-button" disabled={busy} onClick={() => void (error ? refresh() : login())}>{error ? 'Reintentar' : 'Acceder'}</button><p className="auth-hint">¿Participas en un taller? Entra desde el enlace o QR de tu sesión.</p></div></WorkspaceLayout>
+  const { auth, busy, error, expired, refresh } = useFacilitatorAuth()
+  const location = useLocation()
+  useEffect(() => {
+    const check = () => { if (document.visibilityState === 'visible') void refresh() }
+    window.addEventListener('focus', check)
+    document.addEventListener('visibilitychange', check)
+    const timer = window.setInterval(check, 60_000)
+    return () => { window.removeEventListener('focus', check); document.removeEventListener('visibilitychange', check); window.clearInterval(timer) }
+  }, [refresh])
+  if (busy || error) return <main className="auth-page"><Link to="/" className="brand-link"><Brand /></Link><section className="auth-checking" aria-busy={busy}><h1>{error ? 'No podemos comprobar tu acceso' : 'Comprobando acceso…'}</h1>{error ? <><p role="alert">{error}</p><button className="primary-button" disabled={busy} onClick={() => void refresh()}>Reintentar</button><Link to="/">Volver al inicio</Link></> : <p role="status">Un momento, estamos verificando tu sesión.</p>}</section></main>
+  if (!auth.isAuthenticated) {
+    const query = new URLSearchParams({ returnTo: location.pathname + location.search + location.hash })
+    if (expired) query.set('reason', 'expired')
+    return <Navigate to={'/acceso?' + query.toString()} replace />
+  }
+  return children
 }
 
 export function AuthPage() {
   const navigate = useNavigate()
+  const route = useLocation()
+  useEffect(() => { const title = document.title; document.title = 'Acceso de facilitadores · FrameIt'; return () => { document.title = title } }, [])
   const done = () => {
-    const raw = new URLSearchParams(location.search).get('returnTo') ?? '/espacio'
+    const raw = new URLSearchParams(route.search).get('returnTo') ?? '/espacio'
     let target: URL
     try { target = new URL(raw, location.origin) } catch { target = new URL('/espacio', location.origin) }
     const allowed = target.origin === location.origin && /^\/(?:$|espacio(?:\/|$)|clientes(?:\/|$)|sesiones(?:\/|$)|sesion\/|plantillas(?:\/|$)|disenador(?:\/|$)|seguridad(?:\/|$))/.test(target.pathname)
     navigate(allowed ? target.pathname + target.search + target.hash : '/espacio', { replace: true })
   }
-  return <main className="auth-page"><Link to="/" className="brand-link"><Brand /></Link><AuthForm onComplete={done} /></main>
+  return <div className="auth-screen"><main className="auth-page"><Link to="/" className="brand-link" aria-label="FrameIt, inicio"><Brand /></Link><section className="auth-card">{new URLSearchParams(route.search).get('reason') === 'expired' && <p className="auth-session-notice" role="status">Tu sesión ha caducado o ya no es válida. Inicia sesión para continuar.</p>}<AuthForm onComplete={done} /></section><p className="auth-participant-link">¿Vienes a participar en un taller? <Link to="/join">Entrar con un código</Link></p><Link className="auth-home-link" to="/">Volver al inicio</Link></main><LegalFooter /></div>
 }
 
 export function SecurityPage() {

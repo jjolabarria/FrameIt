@@ -2,6 +2,16 @@
 
 Una cuenta local inicial, contraseña y TOTP obligatorio. Los participantes siguen entrando por el enlace o QR de sesión. No hay registro público ni acceso simulado. No se crea una cuenta real durante el despliegue.
 
+## Acceso al backoffice
+
+Las rutas privadas redirigen a `/acceso?returnTo=…` antes de montar la navegación o pedir datos del espacio. Tras verificar contraseña y segundo factor, se recupera la ruta solicitada, incluidos filtros y fragmento. El destino se restringe al mismo origen y a las rutas admitidas; los destinos externos vuelven a `/espacio`.
+
+El login ocupa una página completa con la marca, ayuda de recuperación, información legal y un enlace separado para participantes. El formulario conserva la configuración inicial y los códigos de recuperación existentes. No se ofrece un restablecimiento automático de contraseña que el backend no implemente.
+
+Un 401 en una operación privada invalida el estado de autenticación del navegador, desmonta los componentes privados y devuelve al login con un aviso de sesión caducada. También se comprueba el acceso al recuperar foco/visibilidad y cada 60 segundos mientras la pestaña está visible. El cierre de sesión se comunica a otras pestañas. Los errores al comprobar el acceso muestran una pantalla de reintento sin contenido del backoffice. Estas medidas de interfaz complementan la autorización de la API.
+
+Validación del 10/09/2026: TypeScript, build con Node 24 y lint correctos; pruebas de navegador con API simulada en `tests/loginwall-browser.cjs` para nueve rutas privadas, rutas públicas, segundo factor, retorno completo, 401, cierre entre pestañas, error de conexión y rechazo de redirección externa. Capturas a 1440 y 320 px en `output/playwright/loginwall/`. Las pruebas de esta revisión no ejercitan el proveedor real de autenticación ni el despliegue de Dokploy.
+
 ## Primer acceso local
 
 1. Abrir http://localhost:8080/acceso.

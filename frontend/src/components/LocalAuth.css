@@ -61,3 +61,20 @@
 
 .local-auth-form fieldset { display: grid; gap: 16px; border: 0; padding: 0; margin: 0; min-width: 0; }
 .auth-close:disabled { opacity: .35; cursor: not-allowed; }
+
+/* Full-page access: no private navigation before authentication. */
+.auth-screen { min-height: 100dvh; background: var(--brand-paper); }
+.auth-screen .auth-page { min-height: auto; background: transparent; padding: clamp(28px, 6vh, 64px) 20px 40px; }
+.auth-page > .brand-link { width: fit-content; margin: 0 auto 28px; }
+.auth-card, .auth-checking { width: min(100%, 480px); margin: 0 auto; padding: clamp(24px, 5vw, 36px); border: 1px solid var(--line-strong); border-radius: 12px; background: var(--panel); }
+.auth-checking { display: grid; gap: 20px; }
+.auth-checking h1 { font-size: 1.75rem; }
+.auth-session-notice { margin-bottom: 24px; padding: 12px 16px; border-left: 3px solid var(--brand-green); background: var(--wash); color: var(--brand-ink); line-height: 1.6; }
+.auth-participant-link { max-width: 480px; margin: 24px auto 8px; text-align: center; font-size: .875rem; line-height: 1.6; }
+.auth-participant-link a, .auth-help a { text-decoration: underline; text-underline-offset: 3px; }
+.auth-home-link { display: flex; align-items: center; justify-content: center; width: fit-content; min-height: 44px; margin: auto; text-decoration: underline; font-size: .875rem; }
+.auth-help { font-size: .875rem; line-height: 1.6; }
+.auth-help summary { cursor: pointer; padding: 10px 0; color: var(--brand-green); text-decoration: underline; text-underline-offset: 3px; }
+.auth-help p { padding-block: 8px; }
+.auth-card .primary-button { width: 100%; justify-content: center; }
+.auth-screen a:focus-visible, .auth-help summary:focus-visible { outline: 3px solid var(--brand-green); outline-offset: 4px; }

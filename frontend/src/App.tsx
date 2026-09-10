@@ -1,8 +1,8 @@
 import { LegalPage } from './pages/LegalPage'
 import { JoinPage } from './pages/JoinPage'
 import { LandingPage } from './pages/LandingPage'
-import { AuthDialog, AuthPage, AuthGate, SecurityPage } from './components/LocalAuth'
-import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import { AuthPage, AuthGate, SecurityPage } from './components/LocalAuth'
+import { Navigate, Route, Routes } from 'react-router-dom'
 import './App.css'
 import { ClientsPage } from './pages/ClientsPage'
 import { DesignerPage } from './pages/DesignerPage'
@@ -14,10 +14,8 @@ import { SessionsPage } from './pages/SessionsPage'
 import { TemplatesPage } from './pages/TemplatesPage'
 
 function App() {
-  const { pathname } = useLocation()
-  const publicSession = /^\/(join|proyeccion)(\/|$)/i.test(pathname)
   return (
-    <>{!publicSession && !['/aviso-legal', '/privacidad', '/cookies'].includes(pathname) && <AuthDialog />}<Routes>
+    <Routes>
       <Route path="/aviso-legal" element={<LegalPage kind="notice" />} />
       <Route path="/privacidad" element={<LegalPage kind="privacy" />} />
       <Route path="/cookies" element={<LegalPage kind="cookies" />} />
@@ -37,7 +35,7 @@ function App() {
       <Route path="/proyeccion" element={<JoinPage readOnly />} />
       <Route path="/join/:code" element={<ParticipantSessionPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes></>
+    </Routes>
   )
 }
 
