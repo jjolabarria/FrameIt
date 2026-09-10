@@ -28,6 +28,10 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+        modelBuilder.Entity<Project>().HasOne(x => x.Client).WithMany(x => x.Projects).HasForeignKey(x => x.ClientId).OnDelete(DeleteBehavior.Restrict);
+        modelBuilder.Entity<WorkshopSession>().HasOne(x => x.Client).WithMany().HasForeignKey(x => x.ClientId).OnDelete(DeleteBehavior.Restrict);
+        modelBuilder.Entity<WorkshopSession>().HasOne(x => x.Project).WithMany(x => x.Sessions).HasForeignKey(x => x.ProjectId).OnDelete(DeleteBehavior.Restrict);
+        modelBuilder.Entity<WorkshopSession>().HasOne(x => x.Template).WithMany(x => x.Sessions).HasForeignKey(x => x.TemplateId).OnDelete(DeleteBehavior.Restrict);
         modelBuilder.Entity<Organization>().Property(x => x.Name).HasMaxLength(160);
         modelBuilder.Entity<Organization>().HasData(new Organization { Id = Organization.DefaultId, Name = "OLATIC" });
         modelBuilder.Entity<Client>().HasQueryFilter(x => !OrganizationScopeEnabled || (CurrentOrganizationId != null && x.OrganizationId == CurrentOrganizationId));

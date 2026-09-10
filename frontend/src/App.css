@@ -459,3 +459,19 @@ input[type=radio] { accent-color: var(--accent-strong); width: 18px; height: 18p
 .session-actions-item { display: block; width: 100%; min-height: 44px; padding: .8rem .9rem; border: 0; border-radius: 5px; background: transparent; color: var(--ink); text-align: left; font-size: .85rem; line-height: 1.4; }
 .session-actions-item:hover:not(:disabled), .session-actions-item:focus-visible { background: var(--wash); outline: 2px solid var(--accent); outline-offset: -2px; }
 .session-actions-item--danger { margin-top: .4rem; border-top: 1px solid var(--line); border-radius: 0 0 5px 5px; color: oklch(43% .16 25); }
+
+.lifecycle-actions summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; font-weight: 600; font-size: .85rem; }
+.lifecycle-actions summary::after { content: '▾'; margin-left: .5rem; }
+.lifecycle-actions .action-row { margin-block: .5rem; }
+.lifecycle-dialog { width: min(480px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow: auto; padding: 24px; border: 1px solid var(--line); border-radius: 12px; color: var(--ink); background: var(--panel); }
+.lifecycle-dialog::backdrop { background: #10273899; }
+.lifecycle-dialog h2 { overflow-wrap: anywhere; }
+.lifecycle-dialog p { margin-block: 20px; line-height: 1.6; }
+
+.workspace-sidebar-status > .organization-scope { width: 100%; max-width: 100%; }
+.workspace-sidebar-status > .organization-label { margin: 0; overflow-wrap: anywhere; }
+.user-settings summary > span { min-width: 0; overflow-wrap: anywhere; }
+.user-settings summary > svg { flex-shrink: 0; }
+.user-settings nav { display: grid; gap: .5rem; padding-top: .35rem; }
+.workspace-sidebar-status .user-settings .secondary-button { margin-left: 0; width: 100%; }
+@media (max-width: 800px) { .workspace-sidebar-status > .organization-label { width: 100%; } }

@@ -96,7 +96,8 @@ public sealed record DynamicTemplateSummaryDto(
     int SectionCount,
     int QuestionCount,
     bool IsBuiltIn,
-    DateTimeOffset UpdatedAtUtc);
+    DateTimeOffset UpdatedAtUtc,
+    bool IsArchived = false);
 
 public sealed record ProjectSummaryDto(Guid Id, string Name, string Code, int SessionCount);
 
@@ -151,7 +152,8 @@ public sealed record SessionSnapshotDto(
     IReadOnlyList<SessionQuestionItemDto> QuestionsToFacilitator,
     IReadOnlyList<SessionAttachmentDto> Attachments,
     DateTimeOffset UpdatedAtUtc,
-    int? ResponseCount = null);
+    int? ResponseCount = null,
+    bool IsArchived = false);
 
 public sealed record SessionAgendaQuestionDto(Guid Id, string Title, int Order);
 public sealed record SessionAgendaSectionDto(Guid Id, string Title, int Order, IReadOnlyList<SessionAgendaQuestionDto> Questions);

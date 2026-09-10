@@ -1,3 +1,4 @@
+import { LifecycleActions } from './LifecycleActions'
 import { useEffect, useId, useState, type ReactNode } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { ChevronLeft, ChevronRight, Search, X } from 'lucide-react'
@@ -30,7 +31,7 @@ export function SearchPicker({ label, kind, value, onChange, clientId, disabled 
   const [search, setSearch] = useState('')
   const [active, setActive] = useState(-1)
   const selected = useResource<Choice>(value ? `/api/workspace/${kind}/${value}` : null)
-  const params = new URLSearchParams({ q: search, pageSize: '10' })
+  const params = new URLSearchParams({ selectable: 'true', q: search, pageSize: '10' })
   if (clientId) params.set('clientId', clientId)
   const choices = useResource<PageResult<Choice>>(open && !disabled ? `/api/workspace/${kind}?${params}` : null, 200)
   const items = choices.data?.items ?? []
@@ -49,13 +50,14 @@ export function SearchPicker({ label, kind, value, onChange, clientId, disabled 
   </div>
 }
 
-export function SessionDirectory({ items }: { items: WorkspaceSession[] }) {
+export function SessionDirectory({ items, onChanged }: { items: WorkspaceSession[]; onChanged?: () => void }) {
   const location = useLocation()
   const returnTo = encodeURIComponent(location.pathname + location.search)
-  return <div className="directory-table-wrap"><table className="directory-table session-directory"><caption className="sr-only">Sesiones con cliente, proyecto, estado y última actividad</caption><thead><tr><th scope="col">Sesión</th><th scope="col">Cliente / Proyecto</th><th scope="col">Estado</th><th scope="col">Última actividad</th></tr></thead><tbody>{items.map(session => <tr key={session.id}>
+  return <div className="directory-table-wrap"><table className="directory-table session-directory"><caption className="sr-only">Sesiones con cliente, proyecto, estado y última actividad</caption><thead><tr><th scope="col">Sesión</th><th scope="col">Cliente / Proyecto</th><th scope="col">Estado</th><th scope="col">Última actividad</th>{onChanged && <th scope="col">Acciones</th>}</tr></thead><tbody>{items.map(session => <tr key={session.id}>
     <td data-label="Sesión"><Link className="directory-title" to={`/sesion/${session.id}?returnTo=${returnTo}`}>{session.title}</Link><small>{session.templateTitle} · {session.accessCode}</small>{session.ratingCount > 0 && <small>{session.ratingCount} {session.ratingCount === 1 ? 'valoración' : 'valoraciones'}</small>}</td>
     <td data-label="Cliente / Proyecto"><Link to={`/clientes/${session.clientId}`}>{session.clientName}</Link><Link className="directory-project" to={projectPath(session.clientId, session.projectId)}>{session.projectName} <span>· {session.projectCode}</span></Link></td>
-    <td data-label="Estado"><PhaseBadge phase={session.status === 'Closed' ? 'WrapUp' : session.status === 'Draft' ? 'Draft' : session.phase} /></td>
+    <td data-label="Estado">{session.isArchived && <span className="meta-chip">Archivada</span>}<PhaseBadge phase={session.status === 'Closed' ? 'WrapUp' : session.status === 'Draft' ? 'Draft' : session.phase} /></td>
     <td data-label="Última actividad"><time dateTime={session.updatedAtUtc}>{new Intl.DateTimeFormat('es-ES', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(session.updatedAtUtc))}</time></td>
+    {onChanged && <td data-label="Acciones"><LifecycleActions kind="sessions" id={session.id} name={session.title} archived={session.isArchived} canDelete={session.status === 'Draft'} onChanged={onChanged} /></td>}
   </tr>)}</tbody></table></div>
 }

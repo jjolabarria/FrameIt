@@ -184,8 +184,9 @@ function ParticipantSession({ code }: { code: string }) {
     <ErrorNotice message={error} retry={retry} />
     {!snapshot && error && <Link className="secondary-button" to="/join">Introducir otro código</Link>}
     {!snapshot && !error && <div className="loading-state" role="status">Buscando tu sesión…</div>}
-    {snapshot && closed && <section className="join-surface"><p className="section-label">{snapshot.title}</p><h1>Sesión finalizada</h1><p>Gracias por participar. La valoración está cerrada y ya no se admiten envíos.</p><Link className="secondary-button" to="/join">Entrar en otra sesión</Link></section>}
-    {snapshot && !closed && <>
+    {snapshot?.isArchived && <section className="join-surface"><h1>Sesión archivada</h1><p>Esta sesión está en consulta y no admite participación. Contacta con el facilitador si necesitas retomarla.</p><Link className="secondary-button" to="/join">Entrar en otra sesión</Link></section>}
+    {snapshot && !snapshot.isArchived && closed && <section className="join-surface"><p className="section-label">{snapshot.title}</p><h1>Sesión finalizada</h1><p>Gracias por participar. La valoración está cerrada y ya no se admiten envíos.</p><Link className="secondary-button" to="/join">Entrar en otra sesión</Link></section>}
+    {snapshot && !snapshot.isArchived && !closed && <>
       {!validIdentity ? <section className="join-surface"><p className="section-label">Te damos la bienvenida</p><h1>{snapshot.title}</h1><p className="join-subtitle">{snapshot.templateTitle}</p>
         {removed && <p className="error-banner" role="alert">El facilitador te ha sacado de la sesión. Consulta con él antes de volver a entrar.</p>}
         {identity ? <div role="status"><p>Recuperando tu participación…</p><button className="secondary-button" onClick={retry}>Reintentar</button></div> : <form className="join-form" onSubmit={join}><label>Tu nombre o alias<input autoFocus autoComplete="nickname" maxLength={80} value={alias} onChange={e => setAlias(e.target.value)} placeholder="Cómo quieres aparecer" disabled={joining} /></label><button className="primary-button" disabled={joining || !alias.trim()}>{joining ? 'Entrando…' : 'Entrar a la sesión'}<ArrowRight size={18} /></button></form>}

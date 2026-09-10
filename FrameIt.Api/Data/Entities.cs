@@ -4,6 +4,7 @@ namespace FrameIt.Api.Data;
 
 public sealed class Client
 {
+    public bool IsArchived { get; set; }
     public Guid OrganizationId { get; set; } = Organization.DefaultId;
     public Organization? Organization { get; set; }
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -14,6 +15,7 @@ public sealed class Client
 
 public sealed class Project
 {
+    public bool IsArchived { get; set; }
     public Guid Id { get; set; } = Guid.NewGuid();
     public Guid ClientId { get; set; }
     public Client? Client { get; set; }
@@ -24,6 +26,7 @@ public sealed class Project
 
 public sealed class DynamicTemplate
 {
+    public bool IsArchived { get; set; }
     public Guid? OrganizationId { get; set; }
     public Organization? Organization { get; set; }
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -66,6 +69,7 @@ public sealed class TemplateQuestion
 
 public sealed class WorkshopSession
 {
+    public bool IsArchived { get; set; }
     public Guid Id { get; set; } = Guid.NewGuid();
     public Guid ClientId { get; set; }
     public Client? Client { get; set; }

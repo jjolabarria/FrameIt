@@ -68,6 +68,7 @@ app.MapWorkspaceEndpoints();
 
 app.MapLocalAuth();
 app.MapTemplateAssistant();
+app.MapLifecycle();
 app.MapGet("/api/health", async (AppDbContext db) => await db.Database.CanConnectAsync() ? Results.Ok(new { status = "healthy" }) : Results.StatusCode(503));
 
 app.MapGet("/api/catalog/question-models", () =>
@@ -94,7 +95,7 @@ app.MapGet("/api/catalog/question-models", () =>
 
 app.MapGet("/api/clients", async (AppDbContext db) =>
 {
-    var clients = await db.Clients
+    var clients = await db.Clients.Where(x => !x.IsArchived)
         .Include(x => x.Projects.OrderBy(project => project.Name))
         .ThenInclude(project => project.Sessions)
         .OrderBy(x => x.Name)
@@ -102,7 +103,7 @@ app.MapGet("/api/clients", async (AppDbContext db) =>
             client.Id,
             client.Name,
             client.Industry,
-            client.Projects.Select(project => new ProjectSummaryDto(
+            client.Projects.Where(project => !project.IsArchived).Select(project => new ProjectSummaryDto(
                 project.Id,
                 project.Name,
                 project.Code,
@@ -125,7 +126,10 @@ app.MapPost("/api/clients", async (CreateClientRequest request, AppDbContext db)
 app.MapPost("/api/projects", async (CreateProjectRequest request, AppDbContext db) =>
 {
     if (!WorkspaceEndpoints.ValidProject(request.Name, request.Code)) return Results.BadRequest(new { message = "Indica un nombre (máximo 160 caracteres) y código (máximo 30)." });
+    await using var transaction = await db.Database.BeginTransactionAsync();
+    await LifecycleEndpoints.Lock(db, "clients", request.ClientId);
     var client = await db.Clients.SingleOrDefaultAsync(x => x.Id == request.ClientId);
+    if (client?.IsArchived == true) return Results.Conflict(new { message = "Restaura el cliente antes de crear un proyecto." });
     if (client is null)
     {
         return Results.NotFound(new { message = "Client not found." });
@@ -139,7 +143,8 @@ app.MapPost("/api/projects", async (CreateProjectRequest request, AppDbContext d
     };
 
     db.Projects.Add(project);
-    try { await db.SaveChangesAsync(); }
+    try { await db.SaveChangesAsync();
+        await transaction.CommitAsync(); }
     catch (DbUpdateException exception) when (exception.InnerException is Npgsql.PostgresException { SqlState: Npgsql.PostgresErrorCodes.UniqueViolation })
     {
         return Results.Conflict(new { message = "Este cliente ya tiene un proyecto con ese código. Utiliza otro código." });
@@ -147,9 +152,9 @@ app.MapPost("/api/projects", async (CreateProjectRequest request, AppDbContext d
     return Results.Created($"/api/projects/{project.Id}", project.Id);
 }).RequireAuthorization();
 
-app.MapGet("/api/templates", async (AppDbContext db) =>
+app.MapGet("/api/templates", async (bool? archived, AppDbContext db) =>
 {
-    var templates = await db.DynamicTemplates
+    var templates = await db.DynamicTemplates.Where(x => x.IsArchived == (archived ?? false))
         .Include(x => x.Sections)
         .ThenInclude(x => x.Questions)
         .OrderByDescending(x => x.UpdatedAtUtc)
@@ -224,7 +229,7 @@ app.MapGet("/api/templates/{id:guid}/export", async (Guid id, AppDbContext db) =
 app.MapGet("/api/sessions", async (HttpContext httpContext, AppDbContext db) =>
 {
     var baseUrl = publicUrls.Origin(httpContext.Request);
-    var sessions = await db.WorkshopSessions
+    var sessions = await db.WorkshopSessions.Where(x => !x.IsArchived)
         .Include(x => x.Template)
         .OrderByDescending(x => x.UpdatedAtUtc)
         .ToListAsync();
@@ -234,6 +239,10 @@ app.MapGet("/api/sessions", async (HttpContext httpContext, AppDbContext db) =>
 
 app.MapPost("/api/sessions", async (CreateSessionRequest request, HttpContext httpContext, AppDbContext db) =>
 {
+    await using var transaction = await db.Database.BeginTransactionAsync();
+    await LifecycleEndpoints.Lock(db, "clients", request.ClientId);
+    await LifecycleEndpoints.Lock(db, "projects", request.ProjectId);
+    await LifecycleEndpoints.Lock(db, "templates", request.TemplateId);
     if (string.IsNullOrWhiteSpace(request.Title) || request.Title.Trim().Length > 160)
         return Results.BadRequest(new { message = "Indica un nombre de sesión de hasta 160 caracteres." });
     var template = await db.DynamicTemplates
@@ -252,6 +261,9 @@ app.MapPost("/api/sessions", async (CreateSessionRequest request, HttpContext ht
         return Results.NotFound(new { message = "Client not found." });
     }
 
+    if (template.IsArchived || sessionClient.IsArchived || await db.Projects.AnyAsync(x => x.Id == request.ProjectId && x.IsArchived))
+        return Results.Conflict(new { message = "Restaura el cliente, proyecto o plantilla antes de crear una sesión." });
+
     if (!template.IsBuiltIn && template.OrganizationId != sessionClient.OrganizationId)
         return Results.BadRequest(new { message = "La plantilla y el cliente deben pertenecer a la misma organización." });
 
@@ -263,6 +275,7 @@ app.MapPost("/api/sessions", async (CreateSessionRequest request, HttpContext ht
     var session = template.InstantiateSession(request, () => GenerateAccessCode(db));
     db.WorkshopSessions.Add(session);
     await db.SaveChangesAsync();
+    await transaction.CommitAsync();
 
     var baseUrl = publicUrls.Origin(httpContext.Request);
     return Results.Created($"/api/sessions/{session.Id}", session.ToSummary(baseUrl));
@@ -420,7 +433,7 @@ app.MapPost("/api/sessions/{id:guid}/advance", async (
     IHubContext<SessionHub> hubContext,
     AppDbContext db) =>
 {
-    await using var transaction = await db.Database.BeginTransactionAsync();
+    await using var transaction = await LifecycleEndpoints.ReuseSessionTransaction(db);
     await db.Database.ExecuteSqlInterpolatedAsync($"SELECT 1 FROM \"WorkshopSessions\" WHERE \"Id\" = {id} FOR UPDATE");
     var session = await LoadSession(db, id);
     if (session is null)
@@ -484,7 +497,7 @@ app.MapPost("/api/sessions/{id:guid}/round-state", async (
     IHubContext<SessionHub> hubContext,
     AppDbContext db) =>
 {
-    await using var transaction = await db.Database.BeginTransactionAsync();
+    await using var transaction = await LifecycleEndpoints.ReuseSessionTransaction(db);
     await db.Database.ExecuteSqlInterpolatedAsync($"SELECT 1 FROM \"WorkshopSessions\" WHERE \"Id\" = {id} FOR UPDATE");
     var session = await LoadSession(db, id);
     if (session is null)
@@ -645,7 +658,7 @@ app.MapPost("/api/sessions/{id:guid}/questions", async (
     IHubContext<SessionHub> hubContext,
     AppDbContext db) =>
 {
-    await using var transaction = await db.Database.BeginTransactionAsync();
+    await using var transaction = await LifecycleEndpoints.ReuseSessionTransaction(db);
     await db.Database.ExecuteSqlInterpolatedAsync($"SELECT 1 FROM \"WorkshopSessions\" WHERE \"Id\" = {id} FOR UPDATE");
     var session = await LoadSession(db, id);
     if (session is null)
@@ -720,7 +733,7 @@ app.MapPost("/api/sessions/{id:guid}/feedback", async (
     IHubContext<SessionHub> hubContext,
     AppDbContext db) =>
 {
-    await using var transaction = await db.Database.BeginTransactionAsync();
+    await using var transaction = await LifecycleEndpoints.ReuseSessionTransaction(db);
     await db.Database.ExecuteSqlInterpolatedAsync($"SELECT 1 FROM \"WorkshopSessions\" WHERE \"Id\" = {id} FOR UPDATE");
     var session = await LoadSession(db, id);
     if (session is null)
@@ -793,7 +806,7 @@ app.MapPost("/api/sessions/{id:guid}/survey-state", async (
     IHubContext<SessionHub> hubContext,
     AppDbContext db) =>
 {
-    await using var transaction = await db.Database.BeginTransactionAsync();
+    await using var transaction = await LifecycleEndpoints.ReuseSessionTransaction(db);
     await db.Database.ExecuteSqlInterpolatedAsync($"SELECT 1 FROM \"WorkshopSessions\" WHERE \"Id\" = {id} FOR UPDATE");
     var session = await LoadSession(db, id);
     if (session is null)

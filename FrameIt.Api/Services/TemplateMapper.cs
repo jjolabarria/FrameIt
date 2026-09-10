@@ -58,7 +58,7 @@ public static class TemplateMapper
             template.Sections.Count,
             template.Sections.Sum(x => x.Questions.Count),
             template.IsBuiltIn,
-            template.UpdatedAtUtc);
+            template.UpdatedAtUtc, template.IsArchived);
     }
 
     public static string ToJsonEnvelope(this DynamicTemplate template)
@@ -250,7 +250,7 @@ public static class TemplateMapper
                     x.UploadedAtUtc))
                 .ToList(),
             session.UpdatedAtUtc,
-            facilitator ? activeQuestion.Responses.Count : null);
+            facilitator ? activeQuestion.Responses.Count : null, session.IsArchived);
     }
 
     public static IReadOnlyList<QuestionOptionDto> DeserializeOptions(string json)

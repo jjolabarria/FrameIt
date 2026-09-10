@@ -1,6 +1,6 @@
 export type ProjectSummary = { id: string; name: string; code: string; sessionCount: number }
 export type ClientSummary = { id: string; name: string; industry: string; projects: ProjectSummary[] }
-export type TemplateSummary = { id: string; title: string; objective: string; questionCount: number }
+export type TemplateSummary = { isArchived: boolean; isBuiltIn: boolean; id: string; title: string; objective: string; questionCount: number }
 export type SessionSummary = {
   id: string
   title: string
@@ -27,6 +27,7 @@ export type SessionAttachment = { id: string; fileName: string; contentType: str
 export type FacilitatorAuthState = { isAuthenticated: boolean; name?: string | null; isAdmin?: boolean; organizationId?: string | null; organizationName?: string | null }
 
 export type SessionSnapshot = {
+  isArchived: boolean
   updatedAtUtc: string
   responseCount?: number | null
   id: string

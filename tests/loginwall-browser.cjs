@@ -47,7 +47,7 @@ const root = process.env.FRAMEIT_TEST_URL || 'http://127.0.0.1:5174';
  results.push('Desktop and mobile login fit without horizontal overflow');
  authenticated=true;await page.goto(root+'/acceso?returnTo=https%3A%2F%2Fevil.example');await page.waitForURL(root+'/espacio');results.push('External returnTo rejected');
  const second=await context.newPage();await second.goto(root+'/clientes');await second.getByText('Cliente privado',{exact:true}).waitFor();
- await page.getByRole('button',{name:'Cerrar sesión',exact:true}).click();await page.waitForURL('**/acceso?**');await second.waitForURL('**/acceso?**');assert.equal(await second.locator('.workspace-shell').count(),0);results.push('Logout removes backoffice in both tabs');
+ await page.locator('.user-settings summary').click();await page.getByRole('button',{name:'Cerrar sesión',exact:true}).click();await page.waitForURL('**/acceso?**');await second.waitForURL('**/acceso?**');assert.equal(await second.locator('.workspace-shell').count(),0);results.push('Logout removes backoffice in both tabs');
  failCheck=true;await page.goto(root+'/clientes');await page.getByRole('heading',{name:'No podemos comprobar tu acceso'}).waitFor();assert.equal(await page.locator('.workspace-shell').count(),0);failCheck=false;await page.getByRole('button',{name:'Reintentar',exact:true}).click();await page.waitForURL('**/acceso?**');results.push('Network error fails closed and retry recovers');
  assert.deepEqual(errors,[]);fs.writeFileSync('output/playwright/loginwall/results.json',JSON.stringify(results,null,2));console.log(results);await browser.close();
 })().catch(e=>{console.error(e);process.exit(1)});

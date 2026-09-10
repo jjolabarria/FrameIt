@@ -2,9 +2,9 @@ import { OrganizationScope } from './OrganizationScope'
 import { Brand } from './Brand'
 import type { ReactNode } from 'react'
 
-import { Link, NavLink, useLocation } from 'react-router-dom'
+import { Link, NavLink } from 'react-router-dom'
 
-import { Settings2, ShieldCheck, UsersRound, UserRound, Building2, LayoutDashboard, Library, Radio, Search } from 'lucide-react'
+import { ShieldCheck, UsersRound, UserRound, Building2, LayoutDashboard, Library, Radio, Search } from 'lucide-react'
 
 import { useFacilitatorAuth } from '../hooks/useFacilitatorAuth'
 
@@ -54,7 +54,6 @@ const navItems = [
 export function WorkspaceLayout({ children, title, eyebrow = 'FrameIt', description, search, actions }: WorkspaceLayoutProps) {
 
   const { auth, busy, error, login, logout } = useFacilitatorAuth()
-  const location = useLocation()
 
 
 
@@ -98,30 +97,18 @@ export function WorkspaceLayout({ children, title, eyebrow = 'FrameIt', descript
 
         <section className="workspace-sidebar-status">
 
-          <p className="section-label">Tu cuenta</p>
-
-          <div className="operator-chip">
-
-            <UserRound size={16} />
-
-            <span>{auth.isAuthenticated ? auth.name ?? 'Facilitador' : 'Sin acceso'}</span>
-
-          </div>
-
-          {auth.isAuthenticated && <details className="user-settings" open={location.pathname.startsWith('/configuracion')}>
-            <summary><Settings2 size={16} /><span>Configuración del usuario</span></summary>
-            <nav aria-label="Configuración del usuario"><NavLink className={({ isActive }) => `workspace-nav-link ${isActive ? 'workspace-nav-link--active' : ''}`} to="/configuracion/seguridad"><ShieldCheck size={16} /><span>Seguridad</span></NavLink></nav>
-          </details>}
-
-          {!auth.isAuthenticated ? (
-
-            <button className="secondary-button" disabled={busy} onClick={() => void login()} type="button">
-
-              Entrar
-
-            </button>
-
-          ) : <button className="secondary-button" onClick={() => void logout()} type="button">Cerrar sesión</button>}
+          {auth.isAuthenticated ? <>
+            <OrganizationScope />
+            <details className="user-settings" onKeyDown={event => {
+              if (event.key === 'Escape') { event.currentTarget.open = false; event.currentTarget.querySelector('summary')?.focus() }
+            }}>
+              <summary><UserRound size={18} /><span>{auth.name ?? 'Facilitador'}</span></summary>
+              <nav aria-label="Configuración del usuario">
+                <NavLink className={({ isActive }) => `workspace-nav-link ${isActive ? 'workspace-nav-link--active' : ''}`} to="/configuracion/seguridad"><ShieldCheck size={16} /><span>Seguridad</span></NavLink>
+                <button className="secondary-button" disabled={busy} onClick={() => void logout()} type="button">Cerrar sesión</button>
+              </nav>
+            </details>
+          </> : <><div className="operator-chip"><UserRound size={16} /><span>Sin acceso</span></div><button className="secondary-button" disabled={busy} onClick={() => void login()} type="button">Entrar</button></>}
 
           {error ? <p role="alert" className="micro-error">{error}</p> : null}
 
@@ -148,7 +135,6 @@ export function WorkspaceLayout({ children, title, eyebrow = 'FrameIt', descript
 
 
           <div className="workspace-topbar-actions">
-            <OrganizationScope />
 
             {search ? (
 

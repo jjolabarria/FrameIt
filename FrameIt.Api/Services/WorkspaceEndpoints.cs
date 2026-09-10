@@ -7,30 +7,30 @@ using Npgsql;
 namespace FrameIt.Api.Services;
 
 public sealed record WorkspacePage<T>(IReadOnlyList<T> Items, int TotalCount, int Page, int PageSize, int TotalPages);
-public sealed record WorkspaceClient(Guid Id, string Name, string Industry, int ProjectCount, int SessionCount);
-public sealed record WorkspaceProject(Guid Id, Guid ClientId, string ClientName, string Name, string Code, int SessionCount);
+public sealed record WorkspaceClient(Guid Id, string Name, string Industry, int ProjectCount, int SessionCount, bool IsArchived);
+public sealed record WorkspaceProject(Guid Id, Guid ClientId, string ClientName, string Name, string Code, int SessionCount, bool IsArchived);
 public sealed record WorkspaceSession(Guid Id, string Title, string AccessCode, Guid ClientId, string ClientName,
     Guid ProjectId, string ProjectName, string ProjectCode, string TemplateTitle, SessionStatus Status,
-    SessionPhase Phase, DateTimeOffset UpdatedAtUtc, int RatingCount);
+    SessionPhase Phase, DateTimeOffset UpdatedAtUtc, int RatingCount, bool IsArchived);
 public sealed record UpdateClientRequest(string Name, string Industry);
 public sealed record UpdateProjectRequest(string Name, string Code);
 
 public static class WorkspaceEndpoints
 {
     private static readonly Expression<Func<Client, WorkspaceClient>> ClientRow = c =>
-        new(c.Id, c.Name, c.Industry, c.Projects.Count, c.Projects.Sum(p => p.Sessions.Count));
+        new(c.Id, c.Name, c.Industry, c.Projects.Count, c.Projects.Sum(p => p.Sessions.Count), c.IsArchived);
     private static readonly Expression<Func<Project, WorkspaceProject>> ProjectRow = p =>
-        new(p.Id, p.ClientId, p.Client!.Name, p.Name, p.Code, p.Sessions.Count);
+        new(p.Id, p.ClientId, p.Client!.Name, p.Name, p.Code, p.Sessions.Count, p.IsArchived);
     private static readonly Expression<Func<WorkshopSession, WorkspaceSession>> SessionRow = s =>
         new(s.Id, s.Title, s.AccessCode, s.ClientId, s.Client!.Name, s.ProjectId, s.Project!.Name,
-            s.Project.Code, s.Template!.Title, s.Status, s.Phase, s.UpdatedAtUtc, s.SatisfactionResponses.Count);
+            s.Project.Code, s.Template!.Title, s.Status, s.Phase, s.UpdatedAtUtc, s.SatisfactionResponses.Count, s.IsArchived);
 
     public static void MapWorkspaceEndpoints(this WebApplication app)
     {
         var group = app.MapGroup("/api/workspace").RequireAuthorization();
-        group.MapGet("/clients", async (string? q, int? page, int? pageSize, AppDbContext db, CancellationToken ct) =>
+        group.MapGet("/clients", async (string? q, bool? archived, int? page, int? pageSize, AppDbContext db, CancellationToken ct) =>
         {
-            var query = db.Clients.AsNoTracking();
+            var query = db.Clients.AsNoTracking().Where(x => x.IsArchived == (archived ?? false));
             if (!string.IsNullOrWhiteSpace(q))
             {
                 var search = q.Trim().ToLowerInvariant();
@@ -43,9 +43,10 @@ public static class WorkspaceEndpoints
             var client = await db.Clients.AsNoTracking().Where(c => c.Id == id).Select(ClientRow).FirstOrDefaultAsync(ct);
             return client is null ? Results.NotFound() : Results.Ok(client);
         });
-        group.MapGet("/projects", async (Guid? clientId, string? q, int? page, int? pageSize, AppDbContext db, CancellationToken ct) =>
+        group.MapGet("/projects", async (Guid? clientId, string? q, bool? archived, bool? selectable, int? page, int? pageSize, AppDbContext db, CancellationToken ct) =>
         {
-            var query = db.Projects.AsNoTracking();
+            var query = db.Projects.AsNoTracking().Where(x => x.IsArchived == (archived ?? false));
+            if (selectable == true) query = query.Where(x => !x.Client!.IsArchived);
             if (clientId.HasValue) query = query.Where(p => p.ClientId == clientId);
             if (!string.IsNullOrWhiteSpace(q))
             {
@@ -59,10 +60,10 @@ public static class WorkspaceEndpoints
             var project = await db.Projects.AsNoTracking().Where(p => p.Id == id).Select(ProjectRow).FirstOrDefaultAsync(ct);
             return project is null ? Results.NotFound() : Results.Ok(project);
         });
-        group.MapGet("/sessions", async (Guid? clientId, Guid? projectId, string? q, string? status, string? sort,
+        group.MapGet("/sessions", async (Guid? clientId, Guid? projectId, string? q, string? status, string? sort, bool? archived,
             int? page, int? pageSize, AppDbContext db, CancellationToken ct) =>
         {
-            var query = db.WorkshopSessions.AsNoTracking();
+            var query = db.WorkshopSessions.AsNoTracking().Where(x => x.IsArchived == (archived ?? false));
             if (clientId.HasValue) query = query.Where(s => s.ClientId == clientId);
             if (projectId.HasValue) query = query.Where(s => s.ProjectId == projectId);
             if (!string.IsNullOrWhiteSpace(status))
@@ -93,12 +94,12 @@ public static class WorkspaceEndpoints
         });
         group.MapGet("/overview", async (AppDbContext db, CancellationToken ct) =>
         {
-            var clients = await db.Clients.CountAsync(ct);
-            var projects = await db.Projects.CountAsync(ct);
-            var templates = await db.DynamicTemplates.CountAsync(ct);
-            var liveSessions = await db.WorkshopSessions.CountAsync(s => s.Status == SessionStatus.Live, ct);
-            var recent = await db.WorkshopSessions.AsNoTracking().OrderByDescending(s => s.UpdatedAtUtc).ThenBy(s => s.Id).Take(6).Select(SessionRow).ToListAsync(ct);
-            var active = await db.WorkshopSessions.AsNoTracking().Where(s => s.Status == SessionStatus.Live)
+            var clients = await db.Clients.CountAsync(x => !x.IsArchived, ct);
+            var projects = await db.Projects.CountAsync(x => !x.IsArchived, ct);
+            var templates = await db.DynamicTemplates.CountAsync(x => !x.IsArchived, ct);
+            var liveSessions = await db.WorkshopSessions.CountAsync(s => !s.IsArchived && s.Status == SessionStatus.Live, ct);
+            var recent = await db.WorkshopSessions.AsNoTracking().Where(s => !s.IsArchived).OrderByDescending(s => s.UpdatedAtUtc).ThenBy(s => s.Id).Take(6).Select(SessionRow).ToListAsync(ct);
+            var active = await db.WorkshopSessions.AsNoTracking().Where(s => !s.IsArchived && s.Status == SessionStatus.Live)
                 .OrderByDescending(s => s.UpdatedAtUtc).ThenBy(s => s.Id).Take(6).Select(SessionRow).ToListAsync(ct);
             return Results.Ok(new { clients, projects, templates, liveSessions, recent, active });
         });

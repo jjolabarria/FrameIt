@@ -1,3 +1,4 @@
+import { LifecycleActions } from '../components/LifecycleActions'
 import { useEffect, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, ArrowRight, Play, Square, Eye, MonitorUp, Users, MessageSquare, Paperclip } from 'lucide-react'
@@ -34,6 +35,7 @@ export function FacilitatorSessionPage() {
   }, [auth.isAuthenticated, sessionId, setError])
 
   async function mutate(path: string, body?: unknown, method = 'POST') {
+    if (snapshot?.isArchived) return
     setBusy(true); setError('')
     try { setSnapshot(await api<SessionSnapshot>(`/api/sessions/${sessionId}/${path}`, { method, body: body === undefined ? undefined : JSON.stringify(body) })) }
     catch (reason) { setError((reason as Error).message) }
@@ -59,7 +61,7 @@ export function FacilitatorSessionPage() {
   const questions = agenda.flatMap(s => s.questions.map(q => ({ ...q, sectionId: s.id })))
   const currentIndex = questions.findIndex(q => q.id === snapshot?.activeQuestionId)
   const nextQuestion = currentIndex >= 0 ? questions[currentIndex + 1] : undefined
-  const canControl = auth.isAuthenticated && !authBusy && !busy && connectionState === 'connected'
+  const canControl = !snapshot?.isArchived && auth.isAuthenticated && !authBusy && !busy && connectionState === 'connected'
   const time = getTimeRemaining(snapshot?.timerSeconds ?? 0, snapshot?.roundOpen ?? false, snapshot?.roundOpenedAtUtc, tick)
   const primary = !snapshot ? null : snapshot.phase === 'WrapUp' ? null
     : snapshot.roundOpen ? { text: 'Cerrar ronda', icon: Square, action: () => changePhase('Waiting') }
@@ -73,6 +75,7 @@ export function FacilitatorSessionPage() {
     : { text: 'Revelar resultados', icon: Eye, action: () => changePhase('Results') }
 
   return <main className="session-shell facilitator-session-shell">
+    {snapshot?.isArchived && <section className="confirmation" role="status"><p>Sesión archivada. Puedes consultar los resultados y exportar la documentación. Restáurala para modificarla.</p><LifecycleActions kind="sessions" id={snapshot.id} name={snapshot.title} archived canDelete={snapshot.status === 'Draft'} onChanged={deleted => deleted ? window.location.assign(returnPath) : retry()} /></section>}
     <header className="live-header">
       <div className="live-heading"><Link to={returnPath} className="back-link"><ArrowLeft size={16} /> {returnPath.startsWith('/clientes/') ? 'Volver al proyecto' : returnPath === '/' ? 'Volver al inicio' : 'Volver al listado'}</Link>{context.data && <Breadcrumbs><Link to={`/clientes/${context.data.clientId}`}>{context.data.clientName}</Link><span aria-hidden="true">/</span><Link to={projectPath(context.data.clientId, context.data.projectId)}>{context.data.projectName} · {context.data.projectCode}</Link></Breadcrumbs>}<h1>{snapshot?.title ?? 'Consola de sesión'}</h1></div>
       <div className="action-row">{auth.isAuthenticated && <QuestionNotification key={sessionId} sessionId={sessionId} snapshot={snapshot} />}{snapshot && (snapshot.satisfactionSurveyOpen || snapshot.phase === 'WrapUp' || snapshot.satisfactionSurvey.responseCount > 0) && <a className="secondary-button" href="#survey-results-title">Valoraciones ({snapshot.satisfactionSurvey.responseCount})</a>}{snapshot && <a className="secondary-button" href={`/proyeccion/${snapshot.accessCode}`} target="_blank" rel="noreferrer"><MonitorUp size={17} /> Abrir proyección</a>}<ConnectionNotice state={connectionState} retry={retry} /></div>

@@ -11,5 +11,5 @@ export function OrganizationScope() {
     try { sessionStorage.setItem('frameit.admin-organization', event.target.value) } catch { return }
     // Reload at the workspace boundary so no cached data crosses organization scopes.
     window.location.assign('/espacio')
-  }}><option value="">Todas las organizaciones</option>{data?.organizations.map(org => <option key={org.id} value={org.id}>{org.name}</option>)}</select></label>{error && <p role="alert">{error}</p>}<small>Selecciona una organización para crear clientes o plantillas.</small></div>
+  }}><option value="">Todas las organizaciones</option>{data?.organizations.map(org => <option key={org.id} value={org.id}>{org.name}</option>)}</select></label>{error && <p role="alert">{error}</p>}</div>
 }
