@@ -265,6 +265,23 @@ input[type=radio] { accent-color: var(--accent-strong); width: 18px; height: 18p
 .projection-qr svg { width: 100%; height: auto; display: block; }
 .projection-qr-block p { text-align: center; color: var(--ink-soft); }
 .projection-round { display: flex; flex-direction: column; gap: 1.2rem; flex: 1; min-height: 0; }
+.presentation-slide { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(280px, .95fr); align-items: center; gap: clamp(2rem, 6vw, 7rem); min-height: 65vh; padding: clamp(1rem, 4vw, 4rem) 0; }
+.presentation-slide-copy { display: grid; gap: 1.2rem; max-width: 50rem; }
+.presentation-slide-copy h1 { font-size: clamp(42px, 5vw, 88px); line-height: 1.04; max-width: 15ch; }
+.presentation-slide-copy > p:not(.section-label) { max-width: 55ch; font-size: clamp(22px, 2vw, 32px); line-height: 1.45; color: var(--ink-soft); white-space: pre-wrap; }
+.presentation-slide-copy a { display: inline-flex; align-items: center; gap: .5rem; width: fit-content; color: var(--accent-strong); font-weight: 650; }
+.presentation-slide-media { margin: 0; max-height: 62vh; overflow: hidden; border-radius: 10px; background: var(--wash); }
+.presentation-slide-media img { display: block; width: 100%; max-height: 62vh; object-fit: cover; }
+.presentation-slide--title { grid-template-columns: 1fr; }
+.presentation-slide--title .presentation-slide-copy { max-width: 68rem; }
+.presentation-slide--quote .presentation-slide-copy > p:not(.section-label) { font-family: var(--font-display); font-size: clamp(30px, 3.2vw, 60px); line-height: 1.15; }
+.presentation-slide--compact { min-height: 340px; padding: 2rem; }
+.presentation-slide--compact .presentation-slide-copy h1 { font-size: clamp(30px, 4vw, 58px); }
+.presentation-slide--compact .presentation-slide-copy > p:not(.section-label) { font-size: 1.1rem; }
+.presentation-preview { padding: 1rem 1.5rem 2rem; overflow: hidden; }
+.slide-editor { display: grid; gap: 1rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--line); }
+.slide-image-preview { display: grid; gap: .7rem; max-width: 360px; }
+.slide-image-preview img { width: 100%; max-height: 180px; object-fit: cover; border: 1px solid var(--line); border-radius: 7px; }
 .projection-question-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 2rem; }
 .projection-question-row > div:first-child { display: grid; gap: 1rem; }
 .projection-question-row h1, .projection-closing h1 { font-size: clamp(40px, 3.5vw, 64px); max-width: 38ch; }
@@ -315,6 +332,10 @@ input[type=radio] { accent-color: var(--accent-strong); width: 18px; height: 18p
 }
 @media (max-width: 640px) {
   .projection-shell { height: auto; min-height: 100dvh; }
+  .presentation-slide { grid-template-columns: 1fr; min-height: 70vh; gap: 1.5rem; }
+  .presentation-slide-copy h1 { font-size: clamp(36px, 11vw, 58px); }
+  .presentation-slide-copy > p:not(.section-label) { font-size: 1.2rem; }
+  .presentation-slide-media, .presentation-slide-media img { max-height: 36vh; }
   .projection-response-box { flex: none; height: 40vh; }
   .workspace-shell { display: block; }
   .workspace-sidebar { position: static; height: auto; padding: .8rem 1rem; gap: .8rem; border-right: 0; border-bottom: 1px solid var(--line); }

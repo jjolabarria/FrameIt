@@ -14,6 +14,8 @@ import { Breadcrumbs } from '../components/WorkspaceDataUI'
 import { QuestionContext } from '../components/QuestionContext'
 import { QuestionNotification } from '../components/QuestionNotification'
 import { SessionActionsMenu } from '../components/SessionActionsMenu'
+import { AnimatePresence } from 'motion/react'
+import { PresentationSlide } from '../components/PresentationSlide'
 
 export function FacilitatorSessionPage() {
   const { sessionId = '' } = useParams()
@@ -64,6 +66,7 @@ export function FacilitatorSessionPage() {
   const canControl = !snapshot?.isArchived && auth.isAuthenticated && !authBusy && !busy && connectionState === 'connected'
   const time = getTimeRemaining(snapshot?.timerSeconds ?? 0, snapshot?.roundOpen ?? false, snapshot?.roundOpenedAtUtc, tick)
   const primary = !snapshot ? null : snapshot.phase === 'WrapUp' ? null
+    : snapshot.questionKind === 'Presentation' && nextQuestion ? { text: 'Siguiente elemento', icon: ArrowRight, action: () => changePhase('Waiting', nextQuestion.id, nextQuestion.sectionId) }
     : snapshot.roundOpen ? { text: 'Cerrar ronda', icon: Square, action: () => changePhase('Waiting') }
     : snapshot.phase === 'Lobby' || !snapshot.roundOpenedAtUtc ? { text: 'Abrir ronda', icon: Play, action: () => changePhase('RoundOpen') }
     : snapshot.phase === 'Results' ? nextQuestion
@@ -114,7 +117,7 @@ export function FacilitatorSessionPage() {
             </ul>}
           </section>}
 
-          <div className="live-question"><div><p className="section-label">{snapshot.sectionTitle}</p><h2>{snapshot.questionTitle}</h2><p>{snapshot.questionPrompt}</p></div><div className="live-timer"><span>{snapshot.roundOpen ? 'Tiempo restante' : 'Duración'}</span><strong>{formatTime(time)}</strong></div></div>
+          {snapshot.questionKind === 'Presentation' ? <AnimatePresence mode="wait"><PresentationSlide key={snapshot.activeQuestionId} title={snapshot.questionTitle} body={snapshot.questionPrompt} settings={snapshot.questionSettings} compact /></AnimatePresence> : <div className="live-question"><div><p className="section-label">{snapshot.sectionTitle}</p><h2>{snapshot.questionTitle}</h2><p>{snapshot.questionPrompt}</p></div><div className="live-timer"><span>{snapshot.roundOpen ? 'Tiempo restante' : 'Duración'}</span><strong>{formatTime(time)}</strong></div></div>}
           {snapshot.roundOpen && <p className="muted-copy">La ronda se cerrará automáticamente al llegar a cero.</p>}
           {!snapshot.roundOpen && snapshot.phase === 'Waiting' && snapshot.roundOpenedAtUtc && <p role="status" className="success-copy">Ronda cerrada. Las respuestas se conservan; puedes revelar los resultados o reabrir la ronda.</p>}
           <div className="session-pulse"><span><Users size={18} /><strong>{snapshot.participants.length}</strong> participantes</span><span><strong>{snapshot.responseCount ?? snapshot.responses.length}</strong> respuestas recibidas</span><span><MessageSquare size={17} />{snapshot.questionsToFacilitator.length} dudas</span></div>
@@ -124,9 +127,9 @@ export function FacilitatorSessionPage() {
 
           </div>
           {confirmation && <div className="confirmation" role="alert"><p>{confirmation.text}</p><div className="action-row"><button autoFocus className="secondary-button" disabled={busy} onClick={() => setConfirmation(null)}>Cancelar</button><button className="primary-button" disabled={!canControl} onClick={() => void confirmation.action()}>Confirmar</button></div></div>}
-          <p className="privacy-note">{privacyText(snapshot).replaceAll('tu respuesta', 'las respuestas').replaceAll('Tu respuesta', 'Las respuestas').replace('verá las respuestas', 'verá las respuestas').replace('se comparte', 'se comparten').replace('aparecerá', 'aparecerán').replace('Se mostrará', 'Se mostrarán').replace('tu nombre', 'el nombre de cada participante')}</p>
+          {snapshot.questionKind !== 'Presentation' && <p className="privacy-note">{privacyText(snapshot).replaceAll('tu respuesta', 'las respuestas').replaceAll('Tu respuesta', 'Las respuestas').replace('verá las respuestas', 'verá las respuestas').replace('se comparte', 'se comparten').replace('aparecerá', 'aparecerán').replace('Se mostrará', 'Se mostrarán').replace('tu nombre', 'el nombre de cada participante')}</p>}
           {snapshot.phase === 'Lobby' ? <section className="lobby-share"><div className="access-qr" role="img" aria-label="Código QR para entrar a la sesión" dangerouslySetInnerHTML={{ __html: snapshot.qrSvg }} /><div><p className="section-label">Todo listo para empezar</p><h3>Invita al grupo</h3><strong className="access-code">{snapshot.accessCode}</strong><a className="access-url" href={snapshot.joinUrl} target="_blank" rel="noreferrer">{snapshot.joinUrl}</a><CopyButton value={snapshot.joinUrl} /></div></section>
-            : <section className="response-section"><div className="panel-head"><h3>Respuestas del grupo</h3><span className="meta-chip">{snapshot.responseVisibility === 'FacilitatorOnly' ? 'Solo facilitador' : snapshot.resultsVisible || snapshot.responseVisibility === 'Live' ? 'Compartidas con el grupo' : 'Pendientes de publicar'}</span></div>
+            : snapshot.questionKind === 'Presentation' ? <section className="response-section presentation-status"><p className="muted-copy">La diapositiva está visible en la proyección. Avanza cuando quieras continuar el guion.</p></section> : <section className="response-section"><div className="panel-head"><h3>Respuestas del grupo</h3><span className="meta-chip">{snapshot.responseVisibility === 'FacilitatorOnly' ? 'Solo facilitador' : snapshot.resultsVisible || snapshot.responseVisibility === 'Live' ? 'Compartidas con el grupo' : 'Pendientes de publicar'}</span></div>
               {snapshot.responses.length ? <div className="response-list">{snapshot.responses.map(r => <article key={r.id}><span>{r.participantName}</span><p>{r.value}</p></article>)}</div> : <div className="empty-state"><strong>Aún no hay respuestas</strong><p>{snapshot.roundOpen ? 'El grupo puede responder desde su dispositivo.' : 'Abre la ronda para empezar a recoger ideas.'}</p></div>}
             </section>}
         </section>

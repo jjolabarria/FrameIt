@@ -86,6 +86,7 @@ app.MapGet("/api/catalog/question-models", () =>
             QuestionKind.Ranking => "Ordenación de opciones.",
             QuestionKind.Voting => "Priorización por votos.",
             QuestionKind.Matrix => "Evaluación en matriz simple.",
+            QuestionKind.Presentation => "Diapositiva narrativa para la proyección.",
             _ => "Modelo base."
         }
     });
@@ -188,7 +189,7 @@ app.MapPost("/api/templates", async (CreateTemplateRequest request, AppDbContext
 app.MapPost("/api/templates/import", async (ImportTemplateEnvelope envelope, AppDbContext db) =>
 {
     if (db.CurrentOrganizationId is not Guid organizationId) return Results.BadRequest(new { message = "Selecciona una organización antes de importar una plantilla." });
-    if (envelope.Template.SchemaVersion is not ("frameit.dynamic-template/v1" or "frameit.dynamic-template/v2"))
+    if (envelope.Template.SchemaVersion is not ("frameit.dynamic-template/v1" or "frameit.dynamic-template/v2" or "frameit.dynamic-template/v3"))
     {
         return Results.BadRequest(new { message = "Unsupported template schema version." });
     }
@@ -212,6 +213,19 @@ app.MapPost("/api/templates/import", async (ImportTemplateEnvelope envelope, App
     db.DynamicTemplates.Add(entity);
     await db.SaveChangesAsync();
     return Results.Created($"/api/templates/{entity.Id}", entity.Id);
+}).RequireAuthorization();
+
+app.MapPost("/api/templates/assets", async (HttpRequest request, AppDbContext db, IStorageService storage, CancellationToken cancellationToken) =>
+{
+    if (db.CurrentOrganizationId is null) return Results.BadRequest(new { message = "Selecciona una organización antes de subir una imagen." });
+    var form = await request.ReadFormAsync(cancellationToken);
+    var file = form.Files.FirstOrDefault();
+    if (file is null || file.Length == 0 || file.Length > 8 * 1024 * 1024 || file.ContentType is not ("image/jpeg" or "image/png" or "image/webp"))
+        return Results.BadRequest(new { message = "La imagen debe ser JPG, PNG o WebP y no superar 8 MB." });
+
+    await using var stream = file.OpenReadStream();
+    var stored = await storage.UploadAsync(stream, file.FileName, file.ContentType, cancellationToken, "template-assets");
+    return Results.Ok(new { url = stored.Url, fileName = stored.FileName, contentType = stored.ContentType, sizeBytes = stored.SizeBytes });
 }).RequireAuthorization();
 
 app.MapGet("/api/templates/{id:guid}/export", async (Guid id, AppDbContext db) =>
@@ -572,6 +586,9 @@ app.MapPost("/api/sessions/{id:guid}/responses", async (
     {
         return Results.BadRequest(new { message = "Participant or question not found for this session." });
     }
+
+    if (question.Kind == QuestionKind.Presentation)
+        return Results.Conflict(new { message = "Esta diapositiva no admite respuestas." });
 
     if (request.QuestionId != session.ActiveQuestionId)
         return Results.Conflict(new { message = "La pregunta ha cambiado. Tu borrador se conserva; revisa la pregunta actual." });

@@ -69,7 +69,8 @@ public sealed class TemplateAssistant(HttpClient client, IOptions<OpenAiOptions>
                     Para scope=section devuelve exactamente un bloque; para scope=question exactamente un bloque con una pregunta.
                     Para scope=template devuelve todos los bloques. Conserva las claves existentes cuando conserves contenido.
                     Las claves nuevas deben ser únicas. No alteres privacidad ni tiempos existentes salvo que se pida.
-                    Tipos: ShortText, RichText, StickyNotes (sin opciones); Choice, Voting, Ranking, ColumnSort, Matrix (mínimo dos opciones).
+                    Tipos: ShortText, RichText, StickyNotes (sin opciones); Choice, Voting, Ranking, ColumnSort, Matrix (mínimo dos opciones); Presentation (diapositiva narrativa sin opciones).
+                    Para Presentation usa prompt como cuerpo y settings con slideLayout, slideImageUrl, slideImageAlt, slideLinkUrl y slideLinkLabel; no inventes URLs de imágenes.
                     Opciones son alternativas, columnas o criterios según tipo; no inventes configuraciones avanzadas.
                     Máximo 20 bloques y 100 preguntas; título de plantilla de hasta 200 caracteres y clave de hasta 80.
                     En propuestas nuevas: visibilidad AfterClose, identidad Named,
@@ -138,7 +139,8 @@ public sealed class TemplateAssistant(HttpClient client, IOptions<OpenAiOptions>
         static object Obj(Dictionary<string, object> properties) => new { type = "object", additionalProperties = false, properties, required = properties.Keys.ToArray() };
         static object Arr(object items) => new { type = "array", items };
         var presentation = Obj(new() { ["timerSeconds"] = new { type = "integer" }, ["responseVisibility"] = Enum<ResponseVisibilityMode>(), ["responseIdentityMode"] = Enum<ResponseIdentityMode>(), ["showProgress"] = new { type = "boolean" }, ["allowLateResponses"] = new { type = "boolean" }, ["celebrationStyle"] = Enum<CelebrationStyle>() });
-        var question = Obj(new() { ["key"] = Str(), ["kind"] = Enum<QuestionKind>(), ["title"] = Str(), ["prompt"] = Str(), ["options"] = Arr(Obj(new() { ["id"] = Str(), ["label"] = Str(), ["description"] = new { type = new[] { "string", "null" } } })), ["presentation"] = presentation });
+        var slide = Obj(new() { ["slideLayout"] = Str(), ["slideImageUrl"] = Str(), ["slideImageAlt"] = Str(), ["slideLinkUrl"] = Str(), ["slideLinkLabel"] = Str() });
+        var question = Obj(new() { ["key"] = Str(), ["kind"] = Enum<QuestionKind>(), ["title"] = Str(), ["prompt"] = Str(), ["options"] = Arr(Obj(new() { ["id"] = Str(), ["label"] = Str(), ["description"] = new { type = new[] { "string", "null" } } })), ["presentation"] = presentation, ["settings"] = slide });
         var section = Obj(new() { ["key"] = Str(), ["title"] = Str(), ["objective"] = Str(), ["order"] = new { type = "integer" }, ["questions"] = Arr(question) });
         var draft = Obj(new() { ["key"] = Str(), ["title"] = Str(), ["objective"] = Str(), ["audience"] = Str(), ["facilitatorGuidance"] = Str(), ["sections"] = Arr(section) });
         return Obj(new() { ["message"] = Str(), ["draft"] = new { anyOf = new[] { draft, new { type = "null" } } } });

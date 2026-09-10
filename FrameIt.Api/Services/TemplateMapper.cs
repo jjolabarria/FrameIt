@@ -19,7 +19,7 @@ public static class TemplateMapper
     public static DynamicTemplateDefinitionDto ToDefinition(this DynamicTemplate template)
     {
         return new DynamicTemplateDefinitionDto(
-            "frameit.dynamic-template/v2",
+            "frameit.dynamic-template/v3",
             template.Key,
             template.Title,
             template.Objective,
@@ -208,6 +208,7 @@ public static class TemplateMapper
             activeQuestion.Prompt,
             activeQuestion.Kind,
             DeserializeOptions(activeQuestion.OptionsJson),
+            DeserializeSettings(activeQuestion.SettingsJson),
             session.Participants
                 .OrderBy(x => x.JoinedAtUtc)
                 .Select(x => new ParticipantSummaryDto(x.Id, x.DisplayName, x.IsConnected, x.JoinedAtUtc))

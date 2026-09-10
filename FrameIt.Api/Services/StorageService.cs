@@ -9,7 +9,7 @@ public sealed record StoredObjectResult(string StorageKey, string Url, string Co
 
 public interface IStorageService
 {
-    Task<StoredObjectResult> UploadAsync(Stream stream, string fileName, string contentType, CancellationToken cancellationToken);
+    Task<StoredObjectResult> UploadAsync(Stream stream, string fileName, string contentType, CancellationToken cancellationToken, string prefix = "session-uploads");
 }
 
 public sealed class S3StorageService : IStorageService
@@ -27,10 +27,10 @@ public sealed class S3StorageService : IStorageService
         _client = new AmazonS3Client(_options.AccessKey, _options.SecretKey, config);
     }
 
-    public async Task<StoredObjectResult> UploadAsync(Stream stream, string fileName, string contentType, CancellationToken cancellationToken)
+    public async Task<StoredObjectResult> UploadAsync(Stream stream, string fileName, string contentType, CancellationToken cancellationToken, string prefix = "session-uploads")
     {
         var safeName = Path.GetFileName(fileName);
-        var key = $"session-uploads/{DateTimeOffset.UtcNow:yyyy/MM}/{Guid.NewGuid():N}-{safeName}";
+        var key = $"{prefix.Trim('/')}/{DateTimeOffset.UtcNow:yyyy/MM}/{Guid.NewGuid():N}-{safeName}";
 
         var request = new PutObjectRequest
         {

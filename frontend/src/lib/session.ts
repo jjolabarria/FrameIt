@@ -3,12 +3,13 @@ import type { SessionSnapshot } from '../types'
 const phases = ['Lobby', 'RoundOpen', 'Waiting', 'Results', 'WrapUp']
 const visibility = ['AfterClose', 'Live', 'FacilitatorOnly']
 const identities = ['Anonymous', 'Named', 'Mixed']
-const kinds = ['ShortText', 'RichText', 'StickyNotes', 'ColumnSort', 'Choice', 'Ranking', 'Voting', 'Matrix']
+const kinds = ['ShortText', 'RichText', 'StickyNotes', 'ColumnSort', 'Choice', 'Ranking', 'Voting', 'Matrix', 'Presentation']
 const labels: Record<string, string> = {
   Lobby: 'Sala de espera', RoundOpen: 'Ronda abierta', Waiting: 'En espera', Results: 'Resultados', WrapUp: 'Finalizada',
   Draft: 'Preparada', Live: 'En directo', Closed: 'Finalizada', AfterClose: 'Al publicar resultados', FacilitatorOnly: 'Solo facilitador',
   Anonymous: 'Sin nombre', Named: 'Con nombre', Mixed: 'Con nombre', ShortText: 'Texto breve', RichText: 'Texto libre',
   StickyNotes: 'Ideas', ColumnSort: 'Clasificación', Choice: 'Selección', Ranking: 'Ordenación', Voting: 'Votación', Matrix: 'Matriz',
+  Presentation: 'Diapositiva',
 }
 export function label(value: string) { return labels[value] ?? value }
 export function hasAnswerOptions(kind: string) { return ['Choice', 'Voting', 'Ranking', 'ColumnSort', 'Matrix'].includes(kind) }
@@ -16,7 +17,7 @@ export function normalizeSnapshot(snapshot: SessionSnapshot): SessionSnapshot {
   const normalize = (value: string, values: string[]) => typeof value === 'number' ? values[value] : value
   return { ...snapshot, phase: normalize(snapshot.phase, phases), status: normalize(snapshot.status, ['Draft', 'Live', 'Closed']),
     responseVisibility: normalize(snapshot.responseVisibility, visibility), responseIdentityMode: normalize(snapshot.responseIdentityMode, identities),
-    questionKind: normalize(snapshot.questionKind, kinds),
+    questionKind: normalize(snapshot.questionKind, kinds), questionSettings: snapshot.questionSettings ?? {},
     questionsToFacilitator: (snapshot.questionsToFacilitator ?? []).map(question => ({ ...question,
       roundContext: question.roundContext ? { ...question.roundContext, phase: normalize(question.roundContext.phase, phases) } : question.roundContext })) }
 }

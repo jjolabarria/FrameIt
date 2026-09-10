@@ -30,6 +30,18 @@ public static class TemplateValidation
                 if (question.Options.Any(o => o is null || !Text(o.Id, 160) || !Text(o.Label, 1000) || o.Description?.Length > 3000)
                     || question.Options.Select(o => o.Id).Distinct().Count() != question.Options.Count)
                     return "Las opciones necesitan identificadores únicos y texto.";
+                if (question.Kind == QuestionKind.Presentation)
+                {
+                    if (question.Options.Count != 0)
+                        return "Una diapositiva no puede tener opciones de respuesta.";
+                    var slideSettings = question.Settings ?? new Dictionary<string, string>();
+                    if (slideSettings.TryGetValue("slideImageUrl", out var imageUrl) && !string.IsNullOrWhiteSpace(imageUrl)
+                        && (!Uri.TryCreate(imageUrl, UriKind.Absolute, out var parsedImage) || parsedImage.Scheme is not ("http" or "https")))
+                        return "La imagen de una diapositiva debe usar una URL válida.";
+                    if (slideSettings.TryGetValue("slideLinkUrl", out var linkUrl) && !string.IsNullOrWhiteSpace(linkUrl)
+                        && (!Uri.TryCreate(linkUrl, UriKind.Absolute, out var parsedLink) || parsedLink.Scheme is not ("http" or "https")))
+                        return "El enlace de una diapositiva debe usar una URL válida.";
+                }
                 var p = question.Presentation;
                 if (p is null || p.TimerSeconds is < 0 or > 86400 || !Enum.IsDefined(p.ResponseVisibility)
                     || !Enum.IsDefined(p.ResponseIdentityMode) || !Enum.IsDefined(p.CelebrationStyle))

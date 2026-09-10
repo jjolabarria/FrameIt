@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useBlocker, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, Clock, Eye, ListPlus, Save, Settings2, Plus, X } from 'lucide-react'
+import { AnimatePresence } from 'motion/react'
 import { WorkspaceLayout } from '../components/WorkspaceLayout'
 import { useFacilitatorAuth } from '../hooks/useFacilitatorAuth'
 import { api } from '../lib/api'
@@ -8,6 +9,7 @@ import { label, privacyText, hasAnswerOptions } from '../lib/session'
 import { Disclosure, ErrorNotice } from '../components/SessionUI'
 import { TemplateAssistant } from '../components/TemplateAssistant'
 import type { DesignerQuestionDraft, DesignerSectionDraft, QuestionModelCatalogItem, TemplateDraft, TemplateDefinition } from '../types'
+import { PresentationSlide } from '../components/PresentationSlide'
 
 function createQuestion(kind = 'ShortText'): DesignerQuestionDraft {
   return {
@@ -116,6 +118,21 @@ function DesignerEditor({ sourceId }: { sourceId: string | null }) {
     updateQuestion({ presentation: { ...activeQuestion.presentation, ...patch } })
   }
 
+  function updateSlideSetting(key: string, value: string) {
+    updateQuestion({ settings: { ...(activeQuestion?.settings ?? {}), [key]: value } })
+  }
+
+  async function uploadSlideImage(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    if (!file || !activeQuestion) return
+    setBusy(true); setError('')
+    try {
+      const form = new FormData(); form.append('file', file)
+      const result = await api<{ url: string }>('/api/templates/assets', { method: 'POST', body: form })
+      updateSlideSetting('slideImageUrl', result.url)
+    } catch (reason) { setError((reason as Error).message) } finally { setBusy(false); event.target.value = '' }
+  }
+
   function addSection() {
     setSections((current) => {
       const next = [...current, { key: `bloque-${current.length + 1}`, title: `Bloque ${current.length + 1}`, objective: 'Nuevo objetivo', order: current.length + 1, questions: [createQuestion(catalog[0]?.kind ?? 'ShortText')] }]
@@ -125,11 +142,11 @@ function DesignerEditor({ sourceId }: { sourceId: string | null }) {
     })
   }
 
-  function addQuestion() {
+  function addQuestion(kind = catalog[0]?.kind ?? 'ShortText') {
     setSections((current) =>
       current.map((section, index) => {
         if (index !== activeSectionIndex) return section
-        const questions = [...section.questions, createQuestion(catalog[0]?.kind ?? 'ShortText')]
+        const questions = [...section.questions, createQuestion(kind)]
         setActiveQuestionIndex(questions.length - 1)
         return { ...section, questions }
       }),
@@ -179,7 +196,7 @@ function DesignerEditor({ sourceId }: { sourceId: string | null }) {
       {sourceId && !sourceLoading && !sourceError && <p className="micro-copy">Estás creando una variante. La plantilla original se conserva.</p>}
       {blocker.state === 'blocked' && <div className="confirmation" role="alert"><strong>Tienes cambios sin guardar</strong><p>Si sales ahora perderás los cambios de esta plantilla.</p><div className="action-row"><button autoFocus className="primary-button" onClick={() => blocker.reset()}>Seguir editando</button><button className="secondary-button" onClick={() => blocker.proceed()}>Salir sin guardar</button></div></div>}
       <p className="micro-copy" role="status">{dirty ? 'Cambios sin guardar' : 'Nueva plantilla'}</p>
-      {preview && activeQuestion && <section className="panel"><div className="panel-head"><h2>Así verá la pregunta el participante</h2><span className="meta-chip">Vista previa · no envía respuestas</span></div><div className="participant-shell"><div className="preview-question"><p className="section-label">{activeSection.title}</p><h2>{activeQuestion.title}</h2><p>{activeQuestion.prompt}</p>{hasAnswerOptions(activeQuestion.kind) && activeQuestion.options.map(o => <label className="option-radio" key={o.id}><input type="radio" name="preview" /><span>{o.label || 'Opción sin texto'}</span></label>)}<label>Tu respuesta<textarea rows={3} placeholder="Comparte tu idea…" /></label><button className="primary-button" disabled>Enviar respuesta</button><p className="privacy-note">{privacyText(activeQuestion.presentation)}</p></div></div></section>}
+      {preview && activeQuestion && <section className="panel"><div className="panel-head"><h2>{activeQuestion.kind === 'Presentation' ? 'Así verá la diapositiva la sala' : 'Así verá la pregunta el participante'}</h2><span className="meta-chip">Vista previa · no envía respuestas</span></div>{activeQuestion.kind === 'Presentation' ? <div className="presentation-preview"><AnimatePresence mode="wait"><PresentationSlide key={activeQuestion.key} title={activeQuestion.title} body={activeQuestion.prompt} settings={activeQuestion.settings ?? undefined} /></AnimatePresence></div> : <div className="participant-shell"><div className="preview-question"><p className="section-label">{activeSection.title}</p><h2>{activeQuestion.title}</h2><p>{activeQuestion.prompt}</p>{hasAnswerOptions(activeQuestion.kind) && activeQuestion.options.map(o => <label className="option-radio" key={o.id}><input type="radio" name="preview" /><span>{o.label || 'Opción sin texto'}</span></label>)}<label>Tu respuesta<textarea rows={3} placeholder="Comparte tu idea…" /></label><button className="primary-button" disabled>Enviar respuesta</button><p className="privacy-note">{privacyText(activeQuestion.presentation)}</p></div></div>}</section>}
 
       <div className={showAssistant && !preview ? 'designer-with-assistant' : undefined}>
       <section className="designer-workbench" hidden={preview || sourceLoading || !!sourceError}>
@@ -216,7 +233,7 @@ function DesignerEditor({ sourceId }: { sourceId: string | null }) {
             <section className="question-editor">
               <div className="panel-head">
                 <div><p className="section-label">Bloque activo</p><h2>{activeSection.title}</h2></div>
-                <button className="secondary-button" onClick={addQuestion} type="button">Añadir pregunta</button>
+            <div className="action-row"><button className="secondary-button" onClick={() => addQuestion()} type="button">Añadir pregunta</button><button className="secondary-button" onClick={() => addQuestion('Presentation')} type="button"><Plus size={16} />Añadir diapositiva</button></div>
               </div>
               <div className="form-grid">
                 <label>Título bloque<input value={activeSection.title} onChange={(event) => updateSection({ title: event.target.value })} /></label>
@@ -239,8 +256,8 @@ function DesignerEditor({ sourceId }: { sourceId: string | null }) {
                 </label>
                 <label>Título pregunta<input value={activeQuestion.title} onChange={(event) => updateQuestion({ title: event.target.value })} /></label>
               </div>
-              <label>Enunciado<textarea rows={4} value={activeQuestion.prompt} onChange={(event) => updateQuestion({ prompt: event.target.value })} /></label>
-              {['Choice', 'Voting', 'Ranking', 'ColumnSort', 'Matrix'].includes(activeQuestion.kind) && <section className="option-editor"><h3>Opciones de respuesta</h3>{activeQuestion.options.map((option, index) => <div className="option-editor-row" key={option.id}><label className="sr-only" htmlFor={option.id}>Opción {index + 1}</label><input id={option.id} value={option.label} placeholder={`Opción ${index + 1}`} onChange={e => updateQuestion({ options: activeQuestion.options.map(o => o.id === option.id ? { ...o, label: e.target.value } : o) })} /><button className="icon-button" aria-label={`Eliminar opción ${index + 1}`} onClick={() => updateQuestion({ options: activeQuestion.options.filter(o => o.id !== option.id) })}><X size={16} /></button></div>)}<button className="secondary-button" onClick={() => updateQuestion({ options: [...activeQuestion.options, { id: crypto.randomUUID(), label: '' }] })}><Plus size={16} /> Añadir opción</button></section>}
+              <label>{activeQuestion.kind === 'Presentation' ? 'Texto de la diapositiva' : 'Enunciado'}<textarea rows={4} value={activeQuestion.prompt} onChange={(event) => updateQuestion({ prompt: event.target.value })} /></label>
+              {activeQuestion.kind === 'Presentation' ? <section className="slide-editor"><label>Diseño<select value={activeQuestion.settings?.slideLayout ?? 'text'} onChange={event => updateSlideSetting('slideLayout', event.target.value)}><option value="title">Título</option><option value="text">Texto</option><option value="media">Imagen y texto</option><option value="quote">Cita</option></select></label><label>Imagen<input type="file" accept="image/jpeg,image/png,image/webp" onChange={uploadSlideImage} disabled={busy} /><span className="micro-copy">JPG, PNG o WebP · máximo 8 MB</span></label>{activeQuestion.settings?.slideImageUrl && <div className="slide-image-preview"><img src={activeQuestion.settings.slideImageUrl} alt="Vista previa de la diapositiva" /><button type="button" className="secondary-button" onClick={() => updateSlideSetting('slideImageUrl', '')}>Quitar imagen</button></div>}<label>Texto alternativo<input value={activeQuestion.settings?.slideImageAlt ?? ''} onChange={event => updateSlideSetting('slideImageAlt', event.target.value)} /></label><div className="form-grid"><label>Enlace opcional<input type="url" value={activeQuestion.settings?.slideLinkUrl ?? ''} onChange={event => updateSlideSetting('slideLinkUrl', event.target.value)} placeholder="https://" /></label><label>Texto del enlace<input value={activeQuestion.settings?.slideLinkLabel ?? ''} onChange={event => updateSlideSetting('slideLinkLabel', event.target.value)} placeholder="Abrir recurso" /></label></div></section> : ['Choice', 'Voting', 'Ranking', 'ColumnSort', 'Matrix'].includes(activeQuestion.kind) && <section className="option-editor"><h3>Opciones de respuesta</h3>{activeQuestion.options.map((option, index) => <div className="option-editor-row" key={option.id}><label className="sr-only" htmlFor={option.id}>Opción {index + 1}</label><input id={option.id} value={option.label} placeholder={`Opción ${index + 1}`} onChange={e => updateQuestion({ options: activeQuestion.options.map(o => o.id === option.id ? { ...o, label: e.target.value } : o) })} /><button className="icon-button" aria-label={`Eliminar opción ${index + 1}`} onClick={() => updateQuestion({ options: activeQuestion.options.filter(o => o.id !== option.id) })}><X size={16} /></button></div>)}<button className="secondary-button" onClick={() => updateQuestion({ options: [...activeQuestion.options, { id: crypto.randomUUID(), label: '' }] })}><Plus size={16} /> Añadir opción</button></section>}
             </section>
           ) : null}
         </article>
@@ -250,7 +267,7 @@ function DesignerEditor({ sourceId }: { sourceId: string | null }) {
             <div><p className="section-label">Reglas</p><h2>Presentación</h2></div>
             <Settings2 size={18} />
           </div>
-          {activeQuestion ? (
+          {activeQuestion && activeQuestion.kind !== 'Presentation' ? (
             <>
               <label><span><Clock size={14} /> Tiempo</span><input min={15} step={15} type="number" value={activeQuestion.presentation.timerSeconds} onChange={(event) => updateQuestionPresentation({ timerSeconds: Number(event.target.value) || 60 })} /></label>
               <label><span><Eye size={14} /> Visibilidad</span>

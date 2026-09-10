@@ -56,6 +56,7 @@ export type SessionSnapshot = {
   questionPrompt: string
   questionKind: string
   options: QuestionOption[]
+  questionSettings: Record<string, string>
   participants: ParticipantSummary[]
   responses: ResponseSummary[]
   outcomes: OutcomeItem[]

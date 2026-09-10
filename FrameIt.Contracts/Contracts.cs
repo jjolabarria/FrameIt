@@ -11,7 +11,8 @@ public enum QuestionKind
     Choice,
     Ranking,
     Voting,
-    Matrix
+    Matrix,
+    Presentation
 }
 
 public enum SessionStatus
@@ -145,6 +146,7 @@ public sealed record SessionSnapshotDto(
     string QuestionPrompt,
     QuestionKind QuestionKind,
     IReadOnlyList<QuestionOptionDto> Options,
+    IReadOnlyDictionary<string, string> QuestionSettings,
     IReadOnlyList<ParticipantSummaryDto> Participants,
     IReadOnlyList<ResponseSummaryDto> Responses,
     IReadOnlyList<OutcomeItemDto> Outcomes,
