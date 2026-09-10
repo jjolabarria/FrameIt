@@ -7,3 +7,15 @@
 *.suo
 *.cache
 *.pdb
+
+**/.local-auth/
+
+# Local build, browser evidence and caches
+artifacts/
+verify/
+output/
+.playwright-cli/
+*.log
+.env
+.env.*
+!.env.example

@@ -1,35 +1,107 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Manrope:wght@400;500;600;700&display=swap');
+
+@font-face { font-family: 'Bitter'; src: url('/fonts/bitter-500.ttf') format('truetype'); font-style: normal; font-weight: 500; font-display: swap; }
+@font-face { font-family: 'Source Sans 3'; src: url('/fonts/source-sans-3-400.ttf') format('truetype'); font-style: normal; font-weight: 400; font-display: swap; }
+@font-face { font-family: 'Source Sans 3'; src: url('/fonts/source-sans-3-600.ttf') format('truetype'); font-style: normal; font-weight: 600 700; font-display: swap; }
+
+/* ============================================================
+   DESIGN TOKENS
+   ============================================================ */
+
 :root {
-  color-scheme: dark;
-  font-family: "Segoe UI", "Inter", sans-serif;
+  --brand-ink: #193e43;
+  --brand-green: #286a57;
+  --brand-paper: #f7f8f3;
+  --font-display: 'Space Grotesk', 'Segoe UI', sans-serif;
+  --font-body:    'Manrope', 'Segoe UI', sans-serif;
+
+  /* Ink scale */
+  --ink:       oklch(18% 0.025 255);
+  --ink-soft:  oklch(38% 0.022 250);
+  --ink-faint: oklch(46% 0.020 245);
+
+  /* Surface scale */
+  --bg:          oklch(96.8% 0.005 244);
+  --wash:        oklch(93.5% 0.008 240);
+  --panel:       oklch(99%   0.003 238);
+  --line:        oklch(90%   0.010 240);
+  --line-strong: oklch(83%   0.015 238);
+
+  /* Accent */
+  --accent-strong: var(--brand-ink);
+  --accent:        var(--brand-green);
+  --accent-muted:  oklch(82% 0.048 192);
+  --accent-ink:    var(--brand-paper);
+
+  /* Semantic */
+  --go:          oklch(62% 0.120 178);
+  --go-deep:     oklch(38% 0.090 180);
+  --wait:        oklch(78% 0.118 76);
+  --wait-deep:   oklch(50% 0.100 74);
+  --result:      oklch(64% 0.108 305);
+  --result-deep: oklch(42% 0.086 302);
+  --danger:      oklch(60% 0.175 28);
+  --danger-deep: oklch(46% 0.140 26);
+
+  /* Geometry */
+  --radius:    0.5rem;
+  --radius-lg: 0.75rem;
+
+  /* Base */
+  font-family: var(--font-body);
+  font-size: 16px;
   line-height: 1.5;
   font-weight: 400;
-  color: #f8fafc;
-  background:
-    radial-gradient(circle at top, rgba(234, 88, 12, 0.22), transparent 30%),
-    linear-gradient(180deg, #020617 0%, #111827 40%, #0f172a 100%);
+  color: var(--ink);
+  background: var(--bg);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-* {
+/* ============================================================
+   RESET
+   ============================================================ */
+
+*, *::before, *::after {
   box-sizing: border-box;
+  min-width: 0;           /* critical: prevent grid/flex overflow */
+}
+
+html, body, #root {
+  height: 100%;
 }
 
 body {
   margin: 0;
   min-width: 320px;
-  min-height: 100vh;
+  background: var(--bg);
+  color: var(--ink);
 }
 
 a {
   color: inherit;
+  text-decoration: none;
 }
 
-h1,
-h2,
-h3,
-p {
-  margin-top: 0;
+a:hover {
+  text-decoration: underline;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  line-height: 1.1;
+  margin: 0;
+  color: var(--ink);
+  letter-spacing: -0.025em;
+}
+
+p { margin: 0; }
+
+/* Long strings (URLs, codes) never break layout */
+* {
+  overflow-wrap: break-word;
+  word-break: normal;
 }

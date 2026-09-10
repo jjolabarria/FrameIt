@@ -1,0 +1,5 @@
+.frameit-brand { display: inline-flex; align-items: center; gap: .625rem; color: var(--brand-ink); vertical-align: middle; flex-shrink: 0; }
+.frameit-symbol { display: block; width: 34px; height: 34px; flex: 0 0 34px; }
+.frameit-brand-copy { display: grid; gap: .15rem; }
+.frameit-name { font-family: 'Source Sans 3', 'Segoe UI', sans-serif; font-size: 1.625rem; font-weight: 600; line-height: 1.1; letter-spacing: -.035em; }
+.frameit-brand .frameit-brand-copy small { font-family: var(--font-body); font-size: .65rem; font-weight: 500; letter-spacing: normal; line-height: 1.4; color: var(--ink-faint); }

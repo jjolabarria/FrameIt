@@ -1,0 +1,20 @@
+.legal-footer { width: min(1280px, calc(100% - 48px)); margin: 0 auto; padding: 28px 0; border-top: 1px solid var(--line-strong); color: var(--brand-ink); font-family: var(--font-body); font-size: .875rem; line-height: 1.6; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px 32px; }
+.legal-footer nav { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 24px; }
+.legal-footer nav a { display: inline-flex; align-items: center; min-height: 44px; }
+.legal-footer a, .privacy-notice a { text-decoration: underline; text-underline-offset: 3px; }
+.legal-footer a[aria-current=page] { font-weight: 700; }
+.legal-footer .legal-cookie-note { flex-basis: 100%; max-width: 85ch; }
+.privacy-notice { color: var(--ink-soft); font-size: .875rem; line-height: 1.6; margin-top: 16px; }
+.legal-page { min-height: 100dvh; background: var(--brand-paper); color: var(--brand-ink); }
+.legal-header { max-width: 1120px; margin: auto; padding: 24px; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+.legal-header > a { min-height: 44px; display: inline-flex; align-items: center; }
+.legal-content { max-width: 800px; margin: 32px auto 64px; padding: 0 24px; font-size: 1.0625rem; line-height: 1.75; }
+.legal-content h1 { font-family: 'Bitter', Georgia, serif; color: var(--brand-ink); font-size: clamp(2rem, 5vw, 3rem); margin-bottom: 20px; }
+.legal-content h2 { color: var(--brand-ink); font-size: 1.35rem; margin: 32px 0 12px; line-height: 1.35; }
+.legal-content p, .legal-content ul, .legal-content dl { margin-bottom: 16px; }
+.legal-content dt { font-weight: 700; }
+.legal-content dd { margin: 0 0 12px; }
+.legal-content a { text-decoration: underline; text-underline-offset: 3px; }
+.legal-content .legal-date { font-size: .875rem; }
+.legal-page a:focus-visible, .legal-footer a:focus-visible, .privacy-notice a:focus-visible { outline: 3px solid #a35b1c; outline-offset: 4px; }
+@media (max-width: 480px) { .legal-header { flex-wrap: wrap; gap: 8px; } .legal-content { margin-top: 20px; } }

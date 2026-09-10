@@ -6,10 +6,12 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      '/api': 'https://localhost:7213',
+      // Keep the browser origin so the API's join URLs and QR codes open the frontend.
+      '/api': { target: 'http://localhost:5130', changeOrigin: false },
       '/hubs': {
-        target: 'https://localhost:7213',
+        target: 'http://localhost:5130',
         ws: true,
+        changeOrigin: false,
       },
     },
   },

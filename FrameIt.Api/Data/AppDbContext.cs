@@ -1,20 +1,31 @@
 using System.Text.Json;
 using FrameIt.Contracts;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 
 namespace FrameIt.Api.Data;
 
-public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
+public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbContext<FacilitatorUser, IdentityRole<Guid>, Guid>(options)
 {
+    public DbSet<FacilitatorLoginSession> FacilitatorLoginSessions => Set<FacilitatorLoginSession>();
+    public DbSet<AuthChallenge> AuthChallenges => Set<AuthChallenge>();
+    public DbSet<FacilitatorRecoveryCode> FacilitatorRecoveryCodes => Set<FacilitatorRecoveryCode>();
     public DbSet<Client> Clients => Set<Client>();
     public DbSet<Project> Projects => Set<Project>();
     public DbSet<DynamicTemplate> DynamicTemplates => Set<DynamicTemplate>();
     public DbSet<WorkshopSession> WorkshopSessions => Set<WorkshopSession>();
     public DbSet<SessionParticipant> SessionParticipants => Set<SessionParticipant>();
     public DbSet<QuestionResponse> QuestionResponses => Set<QuestionResponse>();
+    public DbSet<SessionSatisfactionResponse> SessionSatisfactionResponses => Set<SessionSatisfactionResponse>();
+    public DbSet<ParticipantQuestion> ParticipantQuestions => Set<ParticipantQuestion>();
+    public DbSet<SessionAttachment> SessionAttachments => Set<SessionAttachment>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        base.OnModelCreating(modelBuilder);
+        modelBuilder.Entity<FacilitatorLoginSession>().HasIndex(x => x.ExpiresAtUtc);
+        modelBuilder.Entity<AuthChallenge>().HasIndex(x => x.ExpiresAtUtc);
         modelBuilder.Entity<Client>(entity =>
         {
             entity.Property(x => x.Name).HasMaxLength(200);
@@ -48,10 +59,30 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             entity.HasIndex(x => x.AccessCode).IsUnique();
         });
 
+        modelBuilder.Entity<SessionSatisfactionResponse>(entity =>
+        {
+            entity.Property(x => x.Comment).HasMaxLength(2000);
+            entity.HasIndex(x => new { x.WorkshopSessionId, x.SessionParticipantId }).IsUnique();
+        });
+
         modelBuilder.Entity<SessionQuestion>(entity =>
         {
             entity.Property(x => x.OptionsJson).HasColumnType("jsonb");
             entity.Property(x => x.SettingsJson).HasColumnType("jsonb");
+        });
+
+        modelBuilder.Entity<ParticipantQuestion>(entity =>
+        {
+            entity.Property(x => x.Question).HasMaxLength(2000);
+            entity.Property(x => x.RoundContextJson).HasColumnType("jsonb");
+        });
+
+        modelBuilder.Entity<SessionAttachment>(entity =>
+        {
+            entity.Property(x => x.FileName).HasMaxLength(260);
+            entity.Property(x => x.ContentType).HasMaxLength(200);
+            entity.Property(x => x.StorageKey).HasMaxLength(500);
+            entity.Property(x => x.Url).HasMaxLength(2000);
         });
 
         Seed(modelBuilder);

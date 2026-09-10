@@ -1,0 +1,194 @@
+import { Brand } from './Brand'
+import type { ReactNode } from 'react'
+
+import { Link, NavLink } from 'react-router-dom'
+
+import { ShieldCheck, UserRound, Building2, LayoutDashboard, Library, Radio, Search } from 'lucide-react'
+
+import { useFacilitatorAuth } from '../hooks/useFacilitatorAuth'
+
+
+
+type WorkspaceLayoutProps = {
+
+  children: ReactNode
+
+  title: string
+
+  eyebrow?: string
+
+  description?: string
+
+  search?: {
+
+    value: string
+
+    placeholder: string
+
+    onChange: (value: string) => void
+
+  }
+
+  actions?: ReactNode
+
+}
+
+
+
+const navItems = [
+
+  { to: '/espacio', label: 'Inicio', icon: LayoutDashboard },
+
+  { to: '/sesiones', label: 'Sesiones', icon: Radio },
+
+  { to: '/clientes', label: 'Clientes', icon: Building2 },
+
+  { to: '/plantillas', label: 'Plantillas', icon: Library },
+
+  { to: '/seguridad', label: 'Seguridad', icon: ShieldCheck },
+
+]
+
+
+
+export function WorkspaceLayout({ children, title, eyebrow = 'FrameIt', description, search, actions }: WorkspaceLayoutProps) {
+
+  const { auth, busy, error, login, logout } = useFacilitatorAuth()
+
+
+
+  return (
+
+    <div className="workspace-shell"><a className="skip-link" href="#main-content">Saltar al contenido</a>
+
+      <aside className="workspace-sidebar">
+
+        <Link className="brand-link" to="/espacio">
+
+          <Brand tagline="Talleres que avanzan" />
+
+        </Link>
+
+
+
+        <nav className="workspace-nav" aria-label="Navegación principal">
+
+          {navItems.map((item) => {
+
+            const Icon = item.icon
+
+            return (
+
+              <NavLink className={({ isActive }) => `workspace-nav-link ${isActive ? 'workspace-nav-link--active' : ''}`} end={item.to === '/espacio'} key={item.to} to={item.to}>
+
+                <Icon size={18} strokeWidth={1.9} />
+
+                <span>{item.label}</span>
+
+              </NavLink>
+
+            )
+
+          })}
+
+        </nav>
+
+
+
+        <section className="workspace-sidebar-status">
+
+          <p className="section-label">Estado</p>
+
+          <div className="operator-chip">
+
+            <UserRound size={16} />
+
+            <span>{auth.isAuthenticated ? auth.name ?? 'Facilitador' : 'Sin acceso'}</span>
+
+          </div>
+
+          {!auth.isAuthenticated ? (
+
+            <button className="secondary-button" disabled={busy} onClick={() => void login()} type="button">
+
+              Entrar
+
+            </button>
+
+          ) : <button className="secondary-button" onClick={() => void logout()} type="button">Cerrar sesión</button>}
+
+          {error ? <p role="alert" className="micro-error">{error}</p> : null}
+
+        </section>
+
+      </aside>
+
+
+
+      <main className="workspace-main" id="main-content">
+
+        <header className="workspace-topbar">
+
+          <div className="workspace-title">
+
+            <p className="section-label">{eyebrow}</p>
+
+            <h1>{title}</h1>
+
+            {description ? <p>{description}</p> : null}
+
+          </div>
+
+
+
+          <div className="workspace-topbar-actions">
+
+            {search ? (
+
+              <label className="workspace-search">
+
+                <Search size={16} />
+
+                <input aria-label={search.placeholder} placeholder={search.placeholder} value={search.value} onChange={(event) => search.onChange(event.target.value)} />
+
+              </label>
+
+            ) : null}
+
+            {actions}
+
+          </div>
+
+        </header>
+
+
+
+        <section className="workspace-content">{children}</section>
+
+      </main>
+
+    </div>
+
+  )
+
+}
+
+
+
+export function EmptyState({ title, children, action }: { title: string; children: ReactNode; action?: ReactNode }) {
+
+  return (
+
+    <div className="empty-state">
+
+      <strong>{title}</strong>
+
+      <p>{children}</p>
+
+      {action ? <div className="action-row">{action}</div> : null}
+
+    </div>
+
+  )
+
+}

@@ -1,0 +1,63 @@
+name: frameit-local
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: frameit
+      POSTGRES_USER: frameit
+      POSTGRES_PASSWORD: ${FRAMEIT_DB_PASSWORD:-frameit-local}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U frameit -d frameit"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: FrameIt.Api/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_HTTP_PORTS: 8080
+      LocalAuth__BootstrapDirectory: /app/auth-state
+      ConnectionStrings__Postgres: Host=db;Port=5432;Database=frameit;Username=frameit;Password=${FRAMEIT_DB_PASSWORD:-frameit-local}
+    volumes:
+      - ./FrameIt.Api/appsettings.json:/app/appsettings.json:ro
+      - ./FrameIt.Api/appsettings.Development.json:/app/appsettings.Development.json:ro
+      - auth-state:/app/auth-state
+      - data-protection:/root/.aspnet/DataProtection-Keys
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:8080/api/health"]
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 12
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    ports:
+      - "127.0.0.1:${FRAMEIT_PORT:-8080}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  data-protection:
+  auth-state:

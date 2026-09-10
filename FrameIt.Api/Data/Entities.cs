@@ -75,13 +75,19 @@ public sealed class WorkshopSession
     public SessionPhase Phase { get; set; } = SessionPhase.Lobby;
     public bool RoundOpen { get; set; }
     public bool ResultsVisible { get; set; }
+    public bool SatisfactionSurveyOpen { get; set; }
     public DateTimeOffset? RoundOpenedAtUtc { get; set; }
+    public DateTimeOffset? SessionStartedAtUtc { get; set; }
+    public bool TracksSessionTime { get; set; } = true;
     public Guid? ActiveSectionId { get; set; }
     public Guid? ActiveQuestionId { get; set; }
     public DateTimeOffset UpdatedAtUtc { get; set; } = DateTimeOffset.UtcNow;
     public ICollection<SessionSection> Sections { get; set; } = [];
     public ICollection<SessionParticipant> Participants { get; set; } = [];
     public ICollection<SessionOutcome> Outcomes { get; set; } = [];
+    public ICollection<SessionSatisfactionResponse> SatisfactionResponses { get; set; } = [];
+    public ICollection<ParticipantQuestion> ParticipantQuestions { get; set; } = [];
+    public ICollection<SessionAttachment> Attachments { get; set; } = [];
 }
 
 public sealed class SessionSection
@@ -140,4 +146,43 @@ public sealed class SessionOutcome
     public WorkshopSession? WorkshopSession { get; set; }
     public string Bucket { get; set; } = string.Empty;
     public string Text { get; set; } = string.Empty;
+}
+
+public sealed class SessionSatisfactionResponse
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid WorkshopSessionId { get; set; }
+    public WorkshopSession? WorkshopSession { get; set; }
+    public Guid SessionParticipantId { get; set; }
+    public SessionParticipant? SessionParticipant { get; set; }
+    public int Rating { get; set; }
+    public string Comment { get; set; } = string.Empty;
+    public DateTimeOffset SubmittedAtUtc { get; set; } = DateTimeOffset.UtcNow;
+}
+
+public sealed class ParticipantQuestion
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid WorkshopSessionId { get; set; }
+    public WorkshopSession? WorkshopSession { get; set; }
+    public Guid SessionParticipantId { get; set; }
+    public SessionParticipant? SessionParticipant { get; set; }
+    public string Question { get; set; } = string.Empty;
+    public string? RoundContextJson { get; set; }
+    public DateTimeOffset CreatedAtUtc { get; set; } = DateTimeOffset.UtcNow;
+}
+
+public sealed class SessionAttachment
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid WorkshopSessionId { get; set; }
+    public WorkshopSession? WorkshopSession { get; set; }
+    public Guid SessionParticipantId { get; set; }
+    public SessionParticipant? SessionParticipant { get; set; }
+    public string FileName { get; set; } = string.Empty;
+    public string ContentType { get; set; } = string.Empty;
+    public long SizeBytes { get; set; }
+    public string StorageKey { get; set; } = string.Empty;
+    public string Url { get; set; } = string.Empty;
+    public DateTimeOffset UploadedAtUtc { get; set; } = DateTimeOffset.UtcNow;
 }

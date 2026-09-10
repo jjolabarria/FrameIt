@@ -1,0 +1,48 @@
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: frameit_review
+      POSTGRES_USER: frameit_review
+      POSTGRES_PASSWORD: isolated-review-only
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U frameit_review -d frameit_review"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+  api:
+    image: frameit-local-api:latest
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_HTTP_PORTS: 8080
+      LocalAuth__BootstrapDirectory: /app/auth-state
+      ConnectionStrings__Postgres: Host=db;Port=5432;Database=frameit_review;Username=frameit_review;Password=isolated-review-only
+      OpenAI__ApiKey: ""
+    volumes:
+      - auth-state:/app/auth-state
+      - data-protection:/root/.aspnet/DataProtection-Keys
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:8080/api/health"]
+      interval: 5s
+      timeout: 5s
+      start_period: 30s
+      retries: 20
+  web:
+    image: frameit-local-web:latest
+    ports:
+      - "127.0.0.1:18080:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1/healthz"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  auth-state:
+  data-protection:

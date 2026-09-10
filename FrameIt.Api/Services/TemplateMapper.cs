@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using FrameIt.Api.Data;
 using FrameIt.Contracts;
+using QRCoder;
 
 namespace FrameIt.Api.Services;
 
@@ -140,6 +141,7 @@ public static class TemplateMapper
             Phase = SessionPhase.Lobby,
             RoundOpen = false,
             ResultsVisible = false,
+            SatisfactionSurveyOpen = false,
             ActiveSectionId = firstSection.Id,
             ActiveQuestionId = firstQuestion.Id,
             UpdatedAtUtc = DateTimeOffset.UtcNow,
@@ -165,14 +167,19 @@ public static class TemplateMapper
             session.UpdatedAtUtc);
     }
 
-    public static SessionSnapshotDto ToSnapshot(this WorkshopSession session, string baseUrl)
+    public static SessionSnapshotDto ToSnapshot(this WorkshopSession session, string baseUrl, bool facilitator = false)
     {
         var activeSection = session.Sections.First(x => x.Id == session.ActiveSectionId);
         var activeQuestion = activeSection.Questions.First(x => x.Id == session.ActiveQuestionId);
         var sectionIndex = session.Sections.OrderBy(x => x.Order).ToList().FindIndex(x => x.Id == activeSection.Id) + 1;
         var questionIndex = activeSection.Questions.OrderBy(x => x.Order).ToList().FindIndex(x => x.Id == activeQuestion.Id) + 1;
         var presentation = DeserializePresentation(activeQuestion.SettingsJson);
-        var showResponses = presentation.ResponseVisibility == ResponseVisibilityMode.Live || session.ResultsVisible;
+        var showResponses = facilitator || (presentation.ResponseVisibility != ResponseVisibilityMode.FacilitatorOnly &&
+            (presentation.ResponseVisibility == ResponseVisibilityMode.Live || session.ResultsVisible));
+        var satisfactionResponseCount = session.SatisfactionResponses.Count;
+        var satisfactionAverageRating = satisfactionResponseCount == 0
+            ? 0
+            : Math.Round(session.SatisfactionResponses.Average(x => x.Rating), 1);
 
         return new SessionSnapshotDto(
             session.Id,
@@ -182,6 +189,7 @@ public static class TemplateMapper
             session.Phase,
             session.RoundOpen,
             session.ResultsVisible,
+            session.SatisfactionSurveyOpen,
             presentation.TimerSeconds,
             session.RoundOpenedAtUtc,
             activeQuestion.Id,
@@ -209,7 +217,7 @@ public static class TemplateMapper
                     .OrderByDescending(x => x.CreatedAtUtc)
                     .Select(x => new ResponseSummaryDto(
                         x.Id,
-                        x.SessionParticipantId,
+                        presentation.ResponseIdentityMode == ResponseIdentityMode.Anonymous ? null : x.SessionParticipantId,
                         presentation.ResponseIdentityMode == ResponseIdentityMode.Anonymous
                             ? "Participante"
                             : x.SessionParticipant?.DisplayName ?? "Participant",
@@ -217,7 +225,32 @@ public static class TemplateMapper
                         x.CreatedAtUtc))
                     .ToList()
                 : [],
-            session.Outcomes.Select(x => new OutcomeItemDto(x.Bucket, x.Text)).ToList());
+            session.Outcomes.Select(x => new OutcomeItemDto(x.Bucket, x.Text)).ToList(),
+            new SessionSatisfactionSummaryDto(satisfactionResponseCount, satisfactionAverageRating,
+                facilitator ? session.SatisfactionResponses.OrderByDescending(x => x.SubmittedAtUtc)
+                    .Select(x => new SessionSatisfactionResponseDto(x.Id, x.Rating, x.Comment, x.SubmittedAtUtc)).ToList() : []),
+            session.ParticipantQuestions
+                .OrderByDescending(x => x.CreatedAtUtc)
+                .Select(x => new SessionQuestionItemDto(
+                    x.Id,
+                    x.SessionParticipant?.DisplayName ?? "Participante",
+                    x.Question,
+                    x.CreatedAtUtc,
+                    x.RoundContextJson == null ? null : JsonSerializer.Deserialize<QuestionRoundContextDto>(x.RoundContextJson)))
+                .ToList(),
+            session.Attachments
+                .OrderByDescending(x => x.UploadedAtUtc)
+                .Select(x => new SessionAttachmentDto(
+                    x.Id,
+                    x.FileName,
+                    x.ContentType,
+                    x.SizeBytes,
+                    x.SessionParticipant?.DisplayName ?? "Participante",
+                    x.Url,
+                    x.UploadedAtUtc))
+                .ToList(),
+            session.UpdatedAtUtc,
+            facilitator ? activeQuestion.Responses.Count : null);
     }
 
     public static IReadOnlyList<QuestionOptionDto> DeserializeOptions(string json)
@@ -241,9 +274,9 @@ public static class TemplateMapper
 
     private static Dictionary<string, string> MergeSettings(
         QuestionPresentationSettingsDto presentation,
-        IReadOnlyDictionary<string, string> settings)
+        IReadOnlyDictionary<string, string>? settings)
     {
-        var merged = settings.ToDictionary();
+        var merged = settings?.ToDictionary() ?? new Dictionary<string, string>();
         merged["timerSeconds"] = presentation.TimerSeconds.ToString();
         merged["responseVisibility"] = presentation.ResponseVisibility.ToString();
         merged["responseIdentityMode"] = presentation.ResponseIdentityMode.ToString();
@@ -265,19 +298,14 @@ public static class TemplateMapper
 
     private static string BuildQrSvg(string joinUrl)
     {
-        var safeUrl = System.Security.SecurityElement.Escape(joinUrl) ?? joinUrl;
-        return $$"""
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" role="img" aria-label="QR placeholder">
-  <rect width="160" height="160" rx="18" fill="#0f172a"/>
-  <rect x="14" y="14" width="42" height="42" rx="8" fill="#f8fafc"/>
-  <rect x="21" y="21" width="28" height="28" rx="4" fill="#0f172a"/>
-  <rect x="104" y="14" width="42" height="42" rx="8" fill="#f8fafc"/>
-  <rect x="111" y="21" width="28" height="28" rx="4" fill="#0f172a"/>
-  <rect x="14" y="104" width="42" height="42" rx="8" fill="#f8fafc"/>
-  <rect x="21" y="111" width="28" height="28" rx="4" fill="#0f172a"/>
-  <path d="M76 18h12v12H76zm18 0h12v12H94zM76 36h12v12H76zM94 36h12v12H94zM70 70h12v12H70zm18 0h12v12H88zm18 0h12v12h-12zM70 88h12v12H70zm36 0h12v12h-12zM70 106h12v12H70zm18 18h12v12H88zm18-18h12v12h-12zm18 18h12v12h-12z" fill="#f8fafc"/>
-  <text x="80" y="152" text-anchor="middle" font-family="monospace" font-size="8" fill="#cbd5e1">{{safeUrl}}</text>
-</svg>
-""";
+        using var qrGenerator = new QRCodeGenerator();
+        using var qrData = qrGenerator.CreateQrCode(joinUrl, QRCodeGenerator.ECCLevel.Q);
+        var qrCode = new SvgQRCode(qrData);
+        return qrCode.GetGraphic(
+            pixelsPerModule: 8,
+            darkColorHex: "#10213f",
+            lightColorHex: "#ffffff",
+            drawQuietZones: true,
+            sizingMode: SvgQRCode.SizingMode.ViewBoxAttribute);
     }
 }

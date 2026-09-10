@@ -23,6 +23,8 @@ Aunque es una **aplicación interna**, no debe sentirse como una herramienta pro
 - control de la sesión
 - acabado profesional
 - muy baja fricción de acceso
+- interfaz y copy íntegramente en **español**
+- operación segura como aplicación **publicada en Internet**
 
 ## Objetivos de producto
 
@@ -46,6 +48,9 @@ Aunque es una **aplicación interna**, no debe sentirse como una herramienta pro
 - El facilitador sí requiere autenticación.
 - El catálogo de preguntas base es **interno y fijo** en la v1.
 - La plantilla se puede **importar/exportar como JSON**, pero las respuestas de sesiones no forman parte de ese JSON.
+- Los participantes pueden **hacer preguntas al facilitador** y quedan registradas en la sesión.
+- Los participantes pueden **adjuntar archivos e imágenes**.
+- Los adjuntos se almacenan en **S3** desde la API.
 - La puesta en marcha debe ser **muy rápida**, al estilo Kahoot:
   - código corto
   - alias
@@ -82,6 +87,7 @@ Implicaciones:
 - Backend: `ASP.NET Core Minimal APIs`
 - Tiempo real: `SignalR`
 - Base de datos: `PostgreSQL`
+- Almacenamiento de archivos: `Amazon S3`
 - Persistencia del estado de sesión: `EF Core`
 
 ## Modelo conceptual
@@ -117,6 +123,10 @@ Implicaciones:
   - participante unido a una sesión
 - `QuestionResponse`
   - respuesta emitida por un participante
+- `ParticipantQuestion`
+  - pregunta o duda enviada al facilitador
+- `SessionAttachment`
+  - archivo o imagen subida por un participante y almacenada en S3
 - `SessionOutcome`
   - resultado resumido de la sesión
 
@@ -153,6 +163,7 @@ El proyecto `FrameIt.Contracts` centraliza los DTOs y enums que comparten backen
 - `CreateSessionRequest`
 - `JoinSessionRequest`
 - `SubmitResponseRequest`
+- `AskFacilitatorQuestionRequest`
 - `ImportTemplateEnvelope`
 
 ## Importación y exportación JSON
@@ -194,6 +205,8 @@ La API implementa:
 - creación y lectura de sesiones
 - entrada de participantes por sesión
 - envío de respuestas
+- registro de preguntas al facilitador
+- subida de adjuntos a S3
 - avance de estado de sesión
 - apertura y cierre de ronda
 - revelado de resultados
@@ -218,6 +231,8 @@ La API implementa:
 - `GET /api/sessions/by-code/{accessCode}`
 - `POST /api/sessions/{id}/join`
 - `POST /api/sessions/{id}/responses`
+- `POST /api/sessions/{id}/questions`
+- `POST /api/sessions/{id}/attachments`
 - `POST /api/sessions/{id}/advance`
 - `POST /api/sessions/{id}/round-state`
 - `POST /api/sessions/{id}/outcomes`
@@ -244,6 +259,7 @@ Aspectos importantes:
 - `EnsureCreated()` se usa para levantar la base de forma rápida en esta base inicial
 - hay datos semilla para un cliente, un proyecto y una plantilla de ejemplo
 - preguntas y configuraciones se almacenan en JSON (`jsonb`) cuando corresponde
+- los adjuntos se persisten como metadatos en PostgreSQL y el binario vive en S3
 
 ## Frontend React
 
@@ -295,6 +311,8 @@ Capacidades incluidas:
 - resolución de sesión por código en `/join/{code}`
 - unión de participante por nombre
 - envío de respuesta a la pregunta activa
+- envío de preguntas al facilitador
+- subida de archivos e imágenes
 - escucha de actualizaciones en tiempo real por SignalR
 - control de ronda desde facilitador
 - temporizador y progreso visibles
@@ -313,6 +331,7 @@ Ya se ha montado una base funcional que compila:
 - QR SVG generado desde backend como placeholder funcional
 - estados de ronda para sesiones híbridas
 - reglas de visibilidad y autoría en snapshot
+- preguntas al facilitador y adjuntos dentro del snapshot de sesión
 
 ## Verificación realizada
 

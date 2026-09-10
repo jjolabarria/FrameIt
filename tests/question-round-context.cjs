@@ -1,0 +1,86 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const root = 'http://localhost:18080';
+const out = 'output/playwright/question-round-api';
+async function main() {
+  fs.mkdirSync(out, { recursive: true });
+  const login = await fetch(root + '/api/auth/login', { method: 'POST' });
+  assert.equal(login.status, 200);
+  const cookie = login.headers.getSetCookie().map(x => x.split(';')[0]).join('; ');
+  const call = async (url, method = 'GET', body, status = 200) => {
+    const response = await fetch(root + url, { method, headers: { Cookie: cookie, 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
+    assert.equal(response.status, status, `${method} ${url}`);
+    return response.status === 204 ? null : response.json();
+  };
+  async function create(title) {
+    const client = (await call('/api/workspace/clients')).items[0];
+    const project = (await call(`/api/workspace/projects?clientId=${client.id}`)).items[0];
+    const template = (await call('/api/templates'))[0];
+    const session = await call('/api/sessions', 'POST', { title, clientId: client.id, projectId: project.id, templateId: template.id }, 201);
+    const participant = await call(`/api/sessions/${session.id}/join`, 'POST', { displayName: 'QA temporal' });
+    return { sessionId: session.id, participantId: participant.id };
+  }
+  const ask = (fixture, question, extra = {}, status = 200) => call(`/api/sessions/${fixture.sessionId}/questions`, 'POST', { participantId: fixture.participantId, question, ...extra }, status);
+  const change = (fixture, snapshot, phase, extra = {}) => call(`/api/sessions/${fixture.sessionId}/round-state`, 'POST', { phase, roundOpen: phase === 'RoundOpen', resultsVisible: phase === 'Results', activeQuestionId: snapshot.activeQuestionId, ...extra });
+  const latest = snapshot => snapshot.questionsToFacilitator[0];
+  if (process.argv.includes('--seed-legacy')) {
+    const fixture = await create('Legacy temporal · prueba aislada');
+    const snapshot = await ask(fixture, 'Pregunta anterior a la migración');
+    fs.writeFileSync(out + '/legacy.json', JSON.stringify({ ...fixture, questionId: latest(snapshot).id }));
+    console.log('Legacy fixture prepared only on localhost:18080'); return;
+  }
+  const results = [];
+  const legacy = JSON.parse(fs.readFileSync(out + '/legacy.json'));
+  let old = await call(`/api/sessions/${legacy.sessionId}/facilitator`);
+  assert.equal(old.questionsToFacilitator.find(q => q.id === legacy.questionId).roundContext, null);
+  old = await change(legacy, old, 'RoundOpen');
+  old = await ask(legacy, 'Pregunta nueva en sesión antigua');
+  assert.equal(latest(old).roundContext.sessionClockTracked, false);
+  assert.equal(latest(old).roundContext.sessionElapsedSeconds, null);
+  results.push('Migration preserves historical question without inventing context; legacy session clock remains unknown');
+  const fixture = await create('Contexto de rondas · prueba aislada');
+  let snapshot = await ask(fixture, 'Antes del inicio');
+  assert.equal(latest(snapshot).roundContext.sessionClockTracked, true);
+  assert.equal(latest(snapshot).roundContext.sessionElapsedSeconds, null);
+  assert.equal(latest(snapshot).roundContext.roundElapsedSeconds, null);
+  assert.equal(latest(snapshot).roundContext.roundQuestionId, snapshot.activeQuestionId);
+  results.push('Before first opening: linked round, no fabricated elapsed times');
+  snapshot = await change(fixture, snapshot, 'RoundOpen');
+  const firstOpened = snapshot.roundOpenedAtUtc;
+  snapshot = await ask(fixture, 'Durante primera apertura', { expectedQuestionId: snapshot.activeQuestionId, expectedRoundOpenedAtUtc: firstOpened });
+  const historic = latest(snapshot);
+  assert.equal(historic.roundContext.roundOpenedAtUtc, firstOpened);
+  assert.equal(historic.roundContext.roundNumber, 1);
+  assert.equal(historic.roundContext.phase, 'RoundOpen');
+  assert.equal(historic.roundContext.sessionElapsedSeconds, Math.floor((Date.parse(historic.createdAtUtc) - Date.parse(firstOpened)) / 1000));
+  await new Promise(resolve => setTimeout(resolve, 1100));
+  snapshot = await change(fixture, snapshot, 'Waiting');
+  snapshot = await change(fixture, snapshot, 'RoundOpen');
+  assert.notEqual(snapshot.roundOpenedAtUtc, firstOpened);
+  await ask(fixture, 'Borrador de apertura anterior', { expectedQuestionId: snapshot.activeQuestionId, expectedRoundOpenedAtUtc: firstOpened }, 409);
+  snapshot = await ask(fixture, 'Tras reapertura', { expectedQuestionId: snapshot.activeQuestionId, expectedRoundOpenedAtUtc: snapshot.roundOpenedAtUtc });
+  assert(latest(snapshot).roundContext.sessionElapsedSeconds >= 1);
+  assert(latest(snapshot).roundContext.roundElapsedSeconds < latest(snapshot).roundContext.sessionElapsedSeconds);
+  assert.deepEqual(snapshot.questionsToFacilitator.find(q => q.id === historic.id), historic);
+  results.push('Reopening resets round clock only; old opening conflicts and historical metadata remains unchanged');
+  const agenda = await call(`/api/sessions/${fixture.sessionId}/agenda`);
+  const all = agenda.flatMap(section => section.questions.map(question => ({ ...question, sectionId: section.id })));
+  const next = all[1]; assert(next);
+  const stale = { expectedQuestionId: snapshot.activeQuestionId, expectedRoundOpenedAtUtc: snapshot.roundOpenedAtUtc };
+  snapshot = await change(fixture, snapshot, 'Waiting', { activeQuestionId: next.id, activeSectionId: next.sectionId });
+  await ask(fixture, 'Borrador de ronda anterior', stale, 409);
+  snapshot = await ask(fixture, 'Segunda ronda preparada', { expectedQuestionId: next.id, expectedRoundOpenedAtUtc: null });
+  assert.equal(latest(snapshot).roundContext.roundNumber, 2);
+  assert.equal(latest(snapshot).roundContext.roundQuestionId, next.id);
+  assert.equal(latest(snapshot).roundContext.roundElapsedSeconds, null);
+  assert.equal(latest(snapshot).roundContext.roundOpenedAtUtc, null);
+  assert(latest(snapshot).roundContext.sessionElapsedSeconds >= 1);
+  const reloaded = await call(`/api/sessions/${fixture.sessionId}/facilitator`);
+  assert.deepEqual(reloaded.questionsToFacilitator, snapshot.questionsToFacilitator);
+  await change(fixture, snapshot, 'WrapUp');
+  await change(legacy, old, 'WrapUp');
+  results.push('Round change rejects stale draft; unopened next round has stable identity and null round time; reload preserves all context');
+  fs.writeFileSync(out + '/results.json', JSON.stringify({ passed: true, results, fixture, legacy, reviewedAtUtc: new Date().toISOString() }, null, 2));
+  console.log(JSON.stringify({ passed: true, results }, null, 2));
+}
+main().catch(error => { console.error(error); process.exitCode = 1; });
