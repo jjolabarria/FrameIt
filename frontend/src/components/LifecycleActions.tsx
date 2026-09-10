@@ -5,7 +5,7 @@ import { SessionActionsMenu } from './SessionActionsMenu'
 
 type Kind = 'clients' | 'projects' | 'templates' | 'sessions'
 export function ArchiveFilter({ archived, onChange }: { archived: boolean; onChange: (value: boolean) => void }) {
-  return <label>Mostrar<select aria-label="Mostrar" value={archived ? 'archived' : 'active'} onChange={event => onChange(event.target.value === 'archived')}><option value="active">Activos</option><option value="archived">Archivados</option></select></label>
+  return <label className="archive-filter">Mostrar<select aria-label="Mostrar" value={archived ? 'archived' : 'active'} onChange={event => onChange(event.target.value === 'archived')}><option value="active">Activos</option><option value="archived">Archivados</option></select></label>
 }
 
 export function FilterBar({ children, activeCount, onClear }: { children: ReactNode; activeCount: number; onClear: () => void }) {

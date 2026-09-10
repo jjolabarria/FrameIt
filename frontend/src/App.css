@@ -408,6 +408,7 @@ input[type=radio] { accent-color: var(--accent-strong); width: 18px; height: 18p
 .directory-filters { display: flex; align-items: flex-end; flex-wrap: wrap; gap: .8rem; padding-bottom: 1.25rem; margin-bottom: 1.25rem; border-bottom: 1px solid var(--line); }
 .directory-filter-bar .directory-filters { padding-bottom: 1rem; margin-bottom: 0; border-bottom: 0; }
 .directory-filters > label, .directory-filters > .search-picker { flex: 1 1 10rem; }
+.directory-filters > .archive-filter { flex: 0 0 12rem; }
 .directory-filters > button { flex: 0 0 auto; }
 .search-picker { position: relative; min-width: 0; }
 .search-picker > label { display: block; margin-bottom: .4rem; }
