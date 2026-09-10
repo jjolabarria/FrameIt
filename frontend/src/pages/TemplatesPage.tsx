@@ -1,4 +1,4 @@
-import { ArchiveFilter, LifecycleActions } from '../components/LifecycleActions'
+import { ArchiveFilter, FilterBar, LifecycleActions } from '../components/LifecycleActions'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Plus, ArrowRight } from 'lucide-react'
@@ -26,7 +26,9 @@ export function TemplatesPage() {
   const [selected, setSelected] = useState('')
   const visible = templates.filter(t => `${t.title} ${t.objective}`.toLowerCase().includes(query.trim().toLowerCase()))
   return <WorkspaceLayout title="Dinámicas para avanzar" eyebrow="Plantillas" description="Preguntas con intención. Elige un punto de partida y hazlo tuyo." search={{ value: query, placeholder: 'Buscar dinámica', onChange: setQuery }} actions={<Link className="primary-button" to="/disenador"><Plus size={17} /> Nueva plantilla</Link>}>
-    <ArchiveFilter archived={archived} onChange={value => { setArchived(value); setSelected('') }} />
+    <FilterBar activeCount={(archived ? 1 : 0) + (query.trim() ? 1 : 0)} onClear={() => { setArchived(false); setQuery(''); setSelected('') }}>
+      <ArchiveFilter archived={archived} onChange={value => { setArchived(value); setSelected('') }} />
+    </FilterBar>
     <ErrorNotice message={error} retry={reload} />
     {loading ? <div className="loading-state" role="status">Cargando plantillas…</div> : error ? null : <section className="panel collection-list">
       {visible.length ? visible.map(t => <article key={t.id}><div className="collection-row"><div><p className="section-label">{t.questionCount} preguntas</p><h2>{t.title}</h2><p>{t.objective}</p></div><div className="action-row">{!t.isBuiltIn && <LifecycleActions kind="templates" id={t.id} name={t.title} archived={t.isArchived} onChanged={() => { setSelected(''); reload() }} />}<button className="secondary-button" aria-expanded={selected === t.id} aria-controls={`template-${t.id}`} onClick={() => setSelected(selected === t.id ? '' : t.id)}>{selected === t.id ? 'Cerrar detalle' : 'Ver dinámica'}</button>{!t.isArchived && <Link className="secondary-link" to={`/sesiones?crear=1&templateId=${encodeURIComponent(t.id)}`}>Usar <ArrowRight size={16} /></Link>}</div></div>{selected === t.id && <div id={`template-${t.id}`}><TemplateDetail key={t.id} id={t.id} archived={t.isArchived} /></div>}</article>) : <EmptyState title={archived ? 'No hay dinámicas archivadas en esta vista' : query ? 'No encontramos esta dinámica' : 'Tu primera dinámica empieza con una pregunta'} action={query ? <button className="secondary-button" onClick={() => setQuery('')}>Limpiar búsqueda</button> : <Link className="primary-button" to="/disenador">Crear plantilla</Link>}>{query ? 'Prueba otra búsqueda.' : 'Organiza tus preguntas en bloques y reutilízalas en tus talleres.'}</EmptyState>}

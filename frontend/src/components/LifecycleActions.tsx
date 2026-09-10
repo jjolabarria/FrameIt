@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { api } from '../lib/api'
 import { SessionActionsMenu } from './SessionActionsMenu'
@@ -6,6 +6,16 @@ import { SessionActionsMenu } from './SessionActionsMenu'
 type Kind = 'clients' | 'projects' | 'templates' | 'sessions'
 export function ArchiveFilter({ archived, onChange }: { archived: boolean; onChange: (value: boolean) => void }) {
   return <label>Mostrar<select aria-label="Mostrar" value={archived ? 'archived' : 'active'} onChange={event => onChange(event.target.value === 'archived')}><option value="active">Activos</option><option value="archived">Archivados</option></select></label>
+}
+
+export function FilterBar({ children, activeCount, onClear }: { children: ReactNode; activeCount: number; onClear: () => void }) {
+  return <div className="directory-filter-bar">
+    <div className="directory-filter-bar-head">
+      <div><p className="section-label">Filtros</p><span>{activeCount ? `${activeCount} aplicado${activeCount === 1 ? '' : 's'}` : 'Refina este listado'}</span></div>
+      <button type="button" className="ghost-button" disabled={!activeCount} onClick={onClear}>Limpiar filtros</button>
+    </div>
+    <div className="directory-filters">{children}</div>
+  </div>
 }
 
 export function LifecycleActions({ kind, id, name, archived, onChanged, canDelete = true }: { kind: Kind; id: string; name: string; archived: boolean; onChanged: (deleted: boolean) => void; canDelete?: boolean }) {

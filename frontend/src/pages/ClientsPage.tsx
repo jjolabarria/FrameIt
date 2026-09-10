@@ -1,4 +1,4 @@
-import { ArchiveFilter, LifecycleActions } from '../components/LifecycleActions'
+import { ArchiveFilter, FilterBar, LifecycleActions } from '../components/LifecycleActions'
 import { useState } from 'react'
 import { Plus, Pencil, ArrowRight } from 'lucide-react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
@@ -29,7 +29,9 @@ function ClientDirectory({ clientId }: { clientId?: string }) {
   const list = clientId ? projects : clients
   const title = clientId ? client.data?.name ?? 'Detalle de cliente' : 'Clientes'
   return <WorkspaceLayout title={title} eyebrow={clientId ? 'Cliente' : 'Directorio'} description={clientId ? `${client.data?.industry ?? ''} · Proyectos y sesiones de este cliente.` : 'Encuentra cada cliente y organiza sus proyectos desde un único lugar.'} search={{ value: query, placeholder: clientId ? 'Buscar proyecto o código' : 'Buscar cliente o sector', onChange: value => update('q', value) }} actions={<div className="action-row">{client.data && <button className="secondary-button" onClick={() => setEditor('client')}><Pencil size={16} /> Editar cliente</button>}<button className="primary-button" disabled={Boolean(clientId && (!client.data || client.data.isArchived))} onClick={() => setEditor(clientId ? 'project' : 'client')}><Plus size={17} /> {clientId ? 'Nuevo proyecto' : 'Nuevo cliente'}</button></div>}>
-    <ArchiveFilter archived={archived} onChange={value => update('archived', String(value))} />
+    <FilterBar activeCount={(archived ? 1 : 0) + (query.trim() ? 1 : 0)} onClear={() => setParams(previous => { const next = new URLSearchParams(previous); next.delete('archived'); next.delete('q'); next.delete('page'); return next }, { replace: true })}>
+      <ArchiveFilter archived={archived} onChange={value => update('archived', String(value))} />
+    </FilterBar>
     {client.data && <div className="action-row">{client.data.isArchived && <p role="status">Cliente archivado. Su historial se conserva.</p>}<LifecycleActions kind="clients" id={client.data.id} name={client.data.name} archived={client.data.isArchived} canDelete={!client.data.projectCount && !client.data.sessionCount} onChanged={deleted => deleted ? navigate('/clientes') : client.reload()} /></div>}
     {clientId && <Breadcrumbs><Link to="/clientes">Clientes</Link><span aria-hidden="true">/</span><span aria-current="page">{title}</span></Breadcrumbs>}
     <ErrorNotice message={client.error || list.error} retry={() => { client.reload(); list.reload() }} />
