@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { HubConnectionBuilder, LogLevel } from '@microsoft/signalr'
 import { api } from '../lib/api'
 import { normalizeSnapshot } from '../lib/session'
-import type { SessionSnapshot } from '../types'
+import type { SessionSnapshot, JourneyPlayback } from '../types'
 
 type SessionMode = { kind: 'facilitator'; id: string; authenticated?: boolean } | { kind: 'participant'; code: string }
 export type ConnectionState = 'connecting' | 'connected' | 'reconnecting' | 'offline'
@@ -16,9 +16,18 @@ export function useSessionLive(mode: SessionMode) {
   const fetchUrl = mode.kind === 'facilitator' ? `/api/sessions/${mode.id}${privateMode ? '/facilitator' : ''}` : `/api/sessions/by-code/${mode.code}`
   const setSnapshot = useCallback((next: SessionSnapshot) => {
     const normalized = normalizeSnapshot(next)
-    updateSnapshot(current => current && current.id === normalized.id && Date.parse(current.updatedAtUtc) > Date.parse(normalized.updatedAtUtc) ? current : normalized)
+    updateSnapshot(current => {
+      if (!current || current.id !== normalized.id) return normalized
+      if (Date.parse(current.updatedAtUtc) > Date.parse(normalized.updatedAtUtc)) return current
+      return (current.journeyPlayback?.revision ?? -1) > (normalized.journeyPlayback?.revision ?? -1)
+        ? { ...normalized, journeyPlayback: current.journeyPlayback } : normalized
+    })
   }, [])
   const retry = useCallback(() => setAttempt(n => n + 1), [])
+  const setJourneyPlayback = useCallback((playback: JourneyPlayback) => {
+    updateSnapshot(current => current && (!current.journeyPlayback || playback.revision >= current.journeyPlayback.revision)
+      ? { ...current, journeyPlayback: playback } : current)
+  }, [])
 
   useEffect(() => {
     let disposed = false
@@ -65,5 +74,5 @@ export function useSessionLive(mode: SessionMode) {
     })()
     return () => { disposed = true; controller.abort(); window.removeEventListener('offline', offline); window.removeEventListener('online', online); window.removeEventListener('frameit-auth-changed', authChanged); if (connection) void connection.stop() }
   }, [fetchUrl, privateMode, attempt, setSnapshot])
-  return { snapshot, setSnapshot, error, setError, connectionState, retry }
+  return { snapshot, setSnapshot, setJourneyPlayback, error, setError, connectionState, retry }
 }

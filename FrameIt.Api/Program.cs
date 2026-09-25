@@ -391,15 +391,15 @@ app.MapPost("/api/sessions/{id:guid}/journey/playback", async (
     if (session.JourneyPlaybackState == "Playing" && session.JourneyStartedAtUtc is { } started)
         position = Math.Min(duration, position + (int)(now - started).TotalMilliseconds);
     var action = request.Action.Trim().ToLowerInvariant();
-    var milestoneCount = Math.Max(1, journey.Route.Count);
-    var step = (int)(duration * .88 / milestoneCount);
     switch (action)
     {
         case "start": case "restart": position = 0; session.JourneyPlaybackState = "Playing"; session.JourneyStartedAtUtc = now; break;
-        case "resume": session.JourneyPlaybackState = "Playing"; session.JourneyStartedAtUtc = now; break;
+        case "resume": if (position >= duration) position = 0; session.JourneyPlaybackState = "Playing"; session.JourneyStartedAtUtc = now; break;
         case "pause": session.JourneyPlaybackState = "Paused"; session.JourneyStartedAtUtc = null; break;
-        case "next": position = Math.Min(duration, position + step); session.JourneyPlaybackState = "Paused"; session.JourneyStartedAtUtc = null; break;
-        case "previous": position = Math.Max(0, position - step); session.JourneyPlaybackState = "Paused"; session.JourneyStartedAtUtc = null; break;
+        case "next": case "previous":
+            position = JourneyBuilder.Navigate(position, duration, journey.Route.Count, action == "next");
+            session.JourneyStartedAtUtc = session.JourneyPlaybackState == "Playing" ? now : null;
+            break;
         case "stop": position = 0; session.JourneyPlaybackState = "Stopped"; session.JourneyStartedAtUtc = null; break;
         case "seek" when request.PositionMs is { } requested: position = Math.Clamp(requested, 0, duration); session.JourneyStartedAtUtc = session.JourneyPlaybackState == "Playing" ? now : null; break;
         default: return Results.BadRequest(new { message = "Acción de reproducción no válida." });

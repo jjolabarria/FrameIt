@@ -2,6 +2,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { JourneyMilestone, SessionJourney } from '../types'
 import { cameraClearance, createTerrainHeight, terrainContours } from './journeyTerrain'
+import { JourneyClock } from './journeyPlayback'
 
 type MapPoint = { x: number; z: number }
 type AtlasLayout = { capitals: Map<string, MapPoint>; regions: Map<string, MapPoint>; width: number; height: number; minX: number; minZ: number }
@@ -17,12 +18,6 @@ function journeyFrame(progress: number, count: number) {
   const local = chapter - index
   const flight = index === chapters - 1 ? smooth((progress - .88) / .065) : smooth((local - .48) / .52)
   return { index, local, flight, curvePosition: (index + flight) / chapters, overview: smooth((progress - .945) / .055) }
-}
-
-function playbackPosition(journey: SessionJourney) {
-  const { playback } = journey
-  if (playback.state !== 'Playing' || !playback.startedAtUtc) return playback.positionMs
-  return Math.min(playback.durationMs, playback.positionMs + Date.now() - Date.parse(playback.startedAtUtc))
 }
 
 function hash(value: string) {
@@ -91,7 +86,7 @@ function StaticAtlas({ journey, layout, active, finale }: { journey: SessionJour
   </svg></section>
 }
 
-function JourneyScene({ journey, layout, onFailed }: { journey: SessionJourney; layout: AtlasLayout; onFailed: () => void }) {
+function JourneyScene({ journey, layout, clock, duration, onFailed }: { journey: SessionJourney; layout: AtlasLayout; clock: JourneyClock; duration: number; onFailed: () => void }) {
   const host = useRef<HTMLDivElement>(null)
   useEffect(() => {
     let disposed = false
@@ -199,9 +194,11 @@ function JourneyScene({ journey, layout, onFailed }: { journey: SessionJourney; 
       const overviewCamera = new THREE.Vector3()
       let cameraAngle = -.55; let targetAngle = cameraAngle; let cameraAltitude = 12
       let previousSeconds: number | null = null; let nextCameraSearch = 0
+      let previousFrameTime = performance.now()
       const render = () => {
-        const value = clamp(playbackPosition(journey) / Math.max(1, journey.playback.durationMs))
-        const seconds = playbackPosition(journey) / 1000
+        const position = clock.read()
+        const value = clamp(position / Math.max(1, duration))
+        const seconds = position / 1000
         const frame = journeyFrame(value, routeItems.length)
         curve.getPoint(frame.curvePosition, point)
         point.y = terrainHeight(point.x, point.z) + .1
@@ -239,10 +236,12 @@ function JourneyScene({ journey, layout, onFailed }: { journey: SessionJourney; 
         const lift = Math.sin(frame.flight * Math.PI)
         const radius = 10.5 + lift * 2
         const desiredAltitude = point.y + 9 + lift * 1.8
-        const seeked = previousSeconds === null || seconds < previousSeconds || Math.abs(seconds - previousSeconds) > 1
-        const delta = previousSeconds === null ? 0 : Math.min(.05, Math.max(0, seconds - previousSeconds))
+        const frameTime = performance.now()
+        const seeked = previousSeconds === null
+        const delta = previousSeconds === seconds ? 0 : Math.min(.05, Math.max(0, (frameTime - previousFrameTime) / 1000))
+        previousFrameTime = frameTime
         const clearanceAt = (angle: number) => cameraClearance(point, point.x + Math.sin(angle) * radius, point.z + Math.cos(angle) * radius, terrainHeight)
-        if (seeked || seconds >= nextCameraSearch) {
+        if (seeked || frameTime >= nextCameraSearch) {
           let bestScore = Infinity
           // Prefer nearby viewpoints, but circle around an intervening ridge.
           for (let candidate = -8; candidate <= 8; candidate++) {
@@ -251,7 +250,7 @@ function JourneyScene({ journey, layout, onFailed }: { journey: SessionJourney; 
             const score = Math.max(0, required - desiredAltitude) * 5 + Math.abs(candidate) * .3
             if (score < bestScore) { bestScore = score; targetAngle = angle }
           }
-          nextCameraSearch = seconds + .25
+          nextCameraSearch = frameTime + 250
         }
         const angleDelta = Math.atan2(Math.sin(targetAngle - cameraAngle), Math.cos(targetAngle - cameraAngle))
         cameraAngle = seeked ? targetAngle : cameraAngle + angleDelta * (1 - Math.exp(-delta * 2.2))
@@ -271,19 +270,24 @@ function JourneyScene({ journey, layout, onFailed }: { journey: SessionJourney; 
       cleanup = () => { cancelAnimationFrame(raf); observer.disconnect(); renderer.dispose(); root.replaceChildren(); scene.traverse(object => { if (object instanceof THREE.Mesh || object instanceof THREE.Line || object instanceof THREE.Sprite) { object.geometry?.dispose?.(); const materials = Array.isArray(object.material) ? object.material : [object.material]; materials.forEach(material => { if ('map' in material && material.map) material.map.dispose(); material.dispose() }) } }) }
     }).catch(() => { host.current?.setAttribute('data-webgl-failed', 'true'); onFailed() })
     return () => { disposed = true; cleanup() }
-  }, [journey, layout, onFailed])
+  }, [journey, layout, clock, duration, onFailed])
   return <div className="journey-webgl" ref={host} aria-hidden="true" />
 }
 
 export function SessionJourneyView({ journey }: { journey: SessionJourney }) {
   const reduced = useReducedMotion(); const [webglFailed, setWebglFailed] = useState(false); const handleWebglFailure = useCallback(() => setWebglFailed(true), [])
-  const [position, setPosition] = useState(() => playbackPosition(journey))
-  useEffect(() => { setPosition(playbackPosition(journey)); if (journey.playback.state !== 'Playing') return; const id = window.setInterval(() => setPosition(playbackPosition(journey)), 50); return () => clearInterval(id) }, [journey])
-  const layout = useMemo(() => atlasLayout(journey), [journey]); const route = useMemo(() => routeCapitals(journey), [journey]); const progress = clamp(position / Math.max(1, journey.playback.durationMs))
+  const [clock] = useState(() => new JourneyClock(journey.playback))
+  const [position, setPosition] = useState(() => clock.read())
+  // API responses replace their objects on every control command. Only geography changes rebuild WebGL.
+  const modelKey = useMemo(() => JSON.stringify({ ...journey, playback: undefined }), [journey])
+  const model = useMemo(() => JSON.parse(modelKey) as SessionJourney, [modelKey])
+  useEffect(() => { clock.update(journey.playback, !reduced); setPosition(clock.read()) }, [clock, journey.playback, reduced])
+  useEffect(() => { const id = window.setInterval(() => setPosition(clock.read()), 50); return () => clearInterval(id) }, [clock])
+  const layout = useMemo(() => atlasLayout(model), [model]); const route = useMemo(() => routeCapitals(model), [model]); const progress = clamp(position / Math.max(1, journey.playback.durationMs))
   const finale = progress >= .955; const activeIndex = journeyFrame(progress, route.length).index; const active = route[activeIndex]
   const outcomes = useMemo(() => journey.outcomes.slice(0, 4), [journey.outcomes]); const staticMode = reduced || webglFailed
   return <section className={staticMode ? 'journey-shell journey-shell--static' : 'journey-shell'} aria-label="Recorrido de la sesión">
-    {staticMode ? <StaticAtlas journey={journey} layout={layout} active={active} finale={finale} /> : <JourneyScene journey={journey} layout={layout} onFailed={handleWebglFailure} />}
+    {staticMode ? <StaticAtlas journey={model} layout={layout} active={active} finale={finale} /> : <JourneyScene journey={model} layout={layout} clock={clock} duration={journey.playback.durationMs} onFailed={handleWebglFailure} />}
     <JourneyHeader journey={journey} />
     <AnimatePresence mode="wait">{active && progress < .88 && <CapitalCaption key={`${active.id}:${activeIndex}`} item={active} reduced={Boolean(staticMode)} index={activeIndex} count={route.length} localProgress={journeyFrame(progress, route.length).local} />}</AnimatePresence>
     {finale && <motion.div className="journey-finale-wrap" initial={staticMode ? false : { opacity: 0 }} animate={{ opacity: 1 }}><JourneyFinale outcomes={outcomes} /></motion.div>}

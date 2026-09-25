@@ -52,3 +52,15 @@ Check(journey.Route.Count == 3 && journey.Route[0].CapitalId == journey.Route[2]
 Check(journey.Playback.DurationMs * .88 / journey.Route.Count >= 20_000, "Insufficient reading time");
 Check(JourneyBuilder.Playback(session).DurationMs == journey.Playback.DurationMs, "Playback duration mismatch");
 Console.WriteLine("PASS: visibility, published summaries, full-text pagination, vote ties, revisits and synchronized reading time.");
+const int duration = 80_003;
+const int stops = 6;
+var firstNext = JourneyBuilder.Navigate(5_000, duration, stops, true);
+Check(firstNext == (int)Math.Ceiling(duration * .88 / stops), "Next retained offset instead of landing at stop start");
+var secondNext = JourneyBuilder.Navigate(firstNext, duration, stops, true);
+Check(secondNext == (int)Math.Ceiling(2 * duration * .88 / stops), "Rounding skipped or repeated stop");
+Check(JourneyBuilder.Navigate(secondNext + 500, duration, stops, false) == firstNext, "Previous missed stop start");
+Check(JourneyBuilder.Navigate(0, duration, stops, false) == 0, "Previous moved before beginning");
+var finale = JourneyBuilder.Navigate((int)Math.Ceiling(5 * duration * .88 / stops), duration, stops, true);
+Check(finale == (int)Math.Ceiling(duration * .955), "Last stop did not reach agreements");
+Check(JourneyBuilder.Navigate(finale, duration, stops, false) == (int)Math.Ceiling(5 * duration * .88 / stops), "Previous from finale missed last stop");
+Console.WriteLine("PASS: exact stop navigation, fractional durations and finale boundaries.");

@@ -100,7 +100,7 @@ public sealed record DynamicTemplateSummaryDto(
     DateTimeOffset UpdatedAtUtc,
     bool IsArchived = false);
 
-public sealed record SessionJourneyPlaybackDto(string State, int PositionMs, DateTimeOffset? StartedAtUtc, int Revision, int DurationMs);
+public sealed record SessionJourneyPlaybackDto(string State, int PositionMs, DateTimeOffset? StartedAtUtc, int Revision, int DurationMs, int StopCount = 0);
 public sealed record SessionJourneyBranchDto(string Label, int Votes, bool IsWinner);
 public sealed record SessionJourneyRegionDto(Guid Id, string Title, int Order, int CapitalCount, int ResponseCount);
 public sealed record SessionJourneyStopDto(string CapitalId, int Sequence);

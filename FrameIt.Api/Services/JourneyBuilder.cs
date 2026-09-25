@@ -73,7 +73,17 @@ public static class JourneyBuilder
             session.Participants.Count, questions.Sum(x => x.question.Responses.Count), regions, milestones, route,
             session.Outcomes.Select(x => new OutcomeItemDto(x.Bucket, x.Text)).ToList(),
             new SessionJourneyPlaybackDto(session.JourneyPlaybackState, session.JourneyPositionMs,
-                session.JourneyStartedAtUtc, session.JourneyRevision, duration));
+                session.JourneyStartedAtUtc, session.JourneyRevision, duration, route.Count));
+    }
+
+    public static int Navigate(int positionMs, int durationMs, int stopCount, bool forward)
+    {
+        var count = Math.Max(1, stopCount);
+        var step = durationMs * .88 / count;
+        var current = Math.Min(count, (int)Math.Floor(Math.Max(0, positionMs) / step));
+        if (forward && current >= count - 1) return (int)Math.Ceiling(durationMs * .955);
+        var target = forward ? current + 1 : Math.Max(0, current - 1);
+        return (int)Math.Ceiling(target * step);
     }
 
     private static IReadOnlyList<SessionJourneyDetailDto> Details(SessionQuestion question)

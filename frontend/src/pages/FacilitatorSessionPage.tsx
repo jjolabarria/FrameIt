@@ -7,7 +7,8 @@ import { api, formatBytes, getTimeRemaining } from '../lib/api'
 import { formatTime, privacyText } from '../lib/session'
 import { useSessionLive } from '../hooks/useSessionLive'
 import { ConnectionNotice, CopyButton, Disclosure, ErrorNotice, PhaseBadge } from '../components/SessionUI'
-import type { SessionAgendaSection, SessionSnapshot } from '../types'
+import type { SessionAgendaSection, SessionSnapshot, SessionJourney } from '../types'
+import { journeyPosition } from '../components/journeyPlayback'
 import { useResource } from '../hooks/useResource'
 import { projectPath, safeReturnPath, type WorkspaceSession } from '../lib/workspace'
 import { Breadcrumbs } from '../components/WorkspaceDataUI'
@@ -25,7 +26,7 @@ export function FacilitatorSessionPage() {
   const [params] = useSearchParams()
   const returnPath = safeReturnPath(params.get('returnTo'))
   const context = useResource<WorkspaceSession>(auth.isAuthenticated && !authBusy ? `/api/workspace/sessions/${sessionId}` : null)
-  const { snapshot, setSnapshot, error, setError, connectionState, retry } = useSessionLive({ kind: 'facilitator', id: sessionId, authenticated: auth.isAuthenticated })
+  const { snapshot, setSnapshot, setJourneyPlayback, error, setError, connectionState, retry } = useSessionLive({ kind: 'facilitator', id: sessionId, authenticated: auth.isAuthenticated })
   const [agenda, setAgenda] = useState<SessionAgendaSection[]>([])
   const [busy, setBusy] = useState(false)
   const [tick, setTick] = useState(Date.now)
@@ -65,11 +66,19 @@ export function FacilitatorSessionPage() {
   async function controlJourney(action: string, openProjection = false) {
     const projection = openProjection && snapshot ? window.open(`/proyeccion/${snapshot.accessCode}`, '_blank', 'noopener,noreferrer') : null
     setBusy(true); setError('')
-    try { await api(`/api/sessions/${sessionId}/journey/playback`, { method: 'POST', body: JSON.stringify({ action }) }) }
+    try {
+      const result = await api<SessionJourney>(`/api/sessions/${sessionId}/journey/playback`, { method: 'POST', body: JSON.stringify({ action }) })
+      setJourneyPlayback(result.playback)
+    }
     catch (reason) { projection?.close(); setError((reason as Error).message) }
     finally { setBusy(false) }
   }
   const questions = agenda.flatMap(s => s.questions.map(q => ({ ...q, sectionId: s.id })))
+  const playback = snapshot?.journeyPlayback
+  const journeyProgress = playback ? journeyPosition(playback, tick) / Math.max(1, playback.durationMs) : 0
+  const journeyStops = Math.max(1, playback?.stopCount ?? 1)
+  const journeyStop = Math.min(journeyStops, Math.floor(journeyProgress / .88 * journeyStops) + 1)
+  const journeyEnded = journeyProgress >= 1
   const currentIndex = questions.findIndex(q => q.id === snapshot?.activeQuestionId)
   const nextQuestion = currentIndex >= 0 ? questions[currentIndex + 1] : undefined
   const canControl = !snapshot?.isArchived && auth.isAuthenticated && !authBusy && !busy && connectionState === 'connected'
@@ -136,11 +145,11 @@ export function FacilitatorSessionPage() {
 
           </div>
           {(snapshot.status === 'Closed' || snapshot.phase === 'WrapUp') && <section className="journey-controls" aria-label="Controles del recorrido proyectado">
-            <div><Route size={20} /><div><strong>Recorrido de la sesión</strong><p>Una ruta 3D con temas, participación, votaciones y acuerdos.</p></div></div>
+            <div><Route size={20} /><div><strong>Recorrido de la sesión</strong><p>{playback && playback.state !== 'Stopped' ? `${journeyProgress >= .88 ? 'Acuerdos finales' : `Parada ${journeyStop} de ${journeyStops}`} · ${journeyEnded ? 'Finalizado' : playback.state === 'Playing' ? 'Reproduciendo' : 'En pausa'}` : 'Una ruta 3D con las respuestas y decisiones de la sesión.'}</p>{playback && playback.state !== 'Stopped' && <p>Anterior y siguiente cambian de parada. Pausar detiene la reproducción.</p>}</div></div>
             {snapshot.journeyPlayback?.state === 'Stopped' || !snapshot.journeyPlayback ? <button className="primary-button" disabled={!auth.isAuthenticated || busy} onClick={() => void controlJourney('start', true)}><Play size={17} /> Mostrar recorrido</button> : <div className="journey-control-buttons">
-              <button className="secondary-button" aria-label="Hito anterior" disabled={busy} onClick={() => void controlJourney('previous')}><SkipBack size={17} /></button>
-              {snapshot.journeyPlayback.state === 'Playing' ? <button className="primary-button" disabled={busy} onClick={() => void controlJourney('pause')}><Pause size={17} /> Pausar</button> : <button className="primary-button" disabled={busy} onClick={() => void controlJourney('resume')}><Play size={17} /> Continuar</button>}
-              <button className="secondary-button" aria-label="Hito siguiente" disabled={busy} onClick={() => void controlJourney('next')}><SkipForward size={17} /></button>
+              <button className="secondary-button" disabled={busy || (journeyStop === 1 && journeyProgress < .88)} onClick={() => void controlJourney('previous')}><SkipBack size={17} /> Parada anterior</button>
+              {snapshot.journeyPlayback.state === 'Playing' && !journeyEnded ? <button className="primary-button" disabled={busy} onClick={() => void controlJourney('pause')}><Pause size={17} /> Pausar</button> : <button className="primary-button" disabled={busy} onClick={() => void controlJourney(journeyEnded ? 'restart' : 'resume')}><Play size={17} /> {journeyEnded ? 'Volver a reproducir' : 'Reanudar'}</button>}
+              <button className="secondary-button" disabled={busy || journeyProgress >= .955} onClick={() => void controlJourney('next')}><SkipForward size={17} /> {journeyStop === journeyStops ? 'Ver acuerdos' : 'Parada siguiente'}</button>
               <button className="secondary-button" disabled={busy} onClick={() => void controlJourney('restart')}><RotateCcw size={17} /> Reiniciar</button>
               <button className="secondary-button" disabled={busy} onClick={() => void controlJourney('stop')}><Square size={17} /> Salir</button>
             </div>}
