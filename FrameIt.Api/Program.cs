@@ -848,8 +848,9 @@ app.MapPost("/api/sessions/{id:guid}/voting-rounds", async (
         return Results.Conflict(new { message = "La sesión ya no admite nuevas votaciones." });
     var sourceSection = session.Sections.FirstOrDefault(section => section.Questions.Any(question => question.Id == request.SourceQuestionId));
     var source = sourceSection?.Questions.FirstOrDefault(question => question.Id == request.SourceQuestionId);
-    var title = request.Title.Trim();
-    var options = request.Options.Select(option => option with { Id = option.Id.Trim(), Label = option.Label.Trim(), Description = null }).ToArray();
+    var title = request.Title?.Trim() ?? string.Empty;
+    var options = (request.Options ?? []).Select(option => option with
+        { Id = option.Id?.Trim() ?? string.Empty, Label = option.Label?.Trim() ?? string.Empty, Description = null }).ToArray();
     if (sourceSection is null || source is null) return Results.BadRequest(new { message = "El resultado de origen no pertenece a esta sesión." });
     if (title.Length is < 1 or > 300 || options.Length is < 2 or > 12 ||
         options.Any(option => option.Id.Length is < 1 or > 160 || option.Label.Length is < 1 or > 240) ||
@@ -857,35 +858,45 @@ app.MapPost("/api/sessions/{id:guid}/voting-rounds", async (
         options.Select(option => option.Label).Distinct(StringComparer.OrdinalIgnoreCase).Count() != options.Length)
         return Results.BadRequest(new { message = "La votación necesita un título y entre 2 y 12 opciones válidas." });
 
-    foreach (var later in sourceSection.Questions.Where(question => question.Order > source.Order)) later.Order++;
-    var vote = new SessionQuestion
+    await db.Set<SessionQuestion>()
+        .Where(question => question.SessionSectionId == sourceSection.Id && question.Order > source.Order)
+        .ExecuteUpdateAsync(setters => setters.SetProperty(question => question.Order, question => question.Order + 1), httpContext.RequestAborted);
+
+    var voteId = Guid.NewGuid();
+    var voteKey = $"votacion-{voteId:N}";
+    const string votePrompt = "Elige la opción que debería orientar el siguiente paso de la sesión.";
+    var voteOrder = source.Order + 1;
+    var optionsJson = JsonSerializer.Serialize(options);
+    var settingsJson = JsonSerializer.Serialize(new Dictionary<string, string>
     {
-        SessionSectionId = sourceSection.Id,
-        Key = $"votacion-{Guid.NewGuid():N}",
-        Kind = QuestionKind.Voting,
-        Title = title,
-        Prompt = "Elige la opción que debería orientar el siguiente paso de la sesión.",
-        Order = source.Order + 1,
-        OptionsJson = JsonSerializer.Serialize(options),
-        SettingsJson = JsonSerializer.Serialize(new Dictionary<string, string>
-        {
-            ["timerSeconds"] = "60", ["responseVisibility"] = "Live", ["responseIdentityMode"] = "Anonymous",
-            ["showProgress"] = "true", ["allowLateResponses"] = "false", ["celebrationStyle"] = "Subtle",
-            ["sourceQuestionId"] = source.Id.ToString()
-        })
-    };
-    sourceSection.Questions.Add(vote);
-    session.ActiveSectionId = sourceSection.Id;
-    session.ActiveQuestionId = vote.Id;
-    session.Phase = SessionPhase.Waiting;
-    session.RoundOpen = false;
-    session.ResultsVisible = false;
-    session.RoundOpenedAtUtc = null;
-    session.UpdatedAtUtc = DateTimeOffset.UtcNow;
-    await db.SaveChangesAsync(httpContext.RequestAborted);
+        ["timerSeconds"] = "60", ["responseVisibility"] = "Live", ["responseIdentityMode"] = "Anonymous",
+        ["showProgress"] = "true", ["allowLateResponses"] = "false", ["celebrationStyle"] = "Subtle",
+        ["sourceQuestionId"] = source.Id.ToString()
+    });
+    await db.Database.ExecuteSqlInterpolatedAsync($"""
+        INSERT INTO "SessionQuestion"
+            ("Id", "SessionSectionId", "Key", "Kind", "Title", "Prompt", "Order", "OptionsJson", "SettingsJson")
+        VALUES
+            ({voteId}, {sourceSection.Id}, {voteKey}, {(int)QuestionKind.Voting}, {title}, {votePrompt}, {voteOrder},
+             CAST({optionsJson} AS jsonb), CAST({settingsJson} AS jsonb))
+        """, httpContext.RequestAborted);
+
+    var updatedAtUtc = DateTimeOffset.UtcNow;
+    await db.WorkshopSessions.Where(item => item.Id == session.Id).ExecuteUpdateAsync(setters => setters
+        .SetProperty(item => item.ActiveSectionId, sourceSection.Id)
+        .SetProperty(item => item.ActiveQuestionId, voteId)
+        .SetProperty(item => item.Phase, SessionPhase.Waiting)
+        .SetProperty(item => item.RoundOpen, false)
+        .SetProperty(item => item.ResultsVisible, false)
+        .SetProperty(item => item.RoundOpenedAtUtc, (DateTimeOffset?)null)
+        .SetProperty(item => item.UpdatedAtUtc, updatedAtUtc), httpContext.RequestAborted);
+    await JourneyBuilder.RecordDirectAsync(db, session.Id, "VotingCreated", sourceSection.Id, voteId, httpContext.RequestAborted);
     await transaction.CommitAsync();
-    await hubContext.PublishSession(session, publicUrls.Origin(httpContext.Request), db, httpContext.RequestAborted);
-    return Results.Ok(session.ToSnapshot(publicUrls.Origin(httpContext.Request), facilitator: true));
+    db.ChangeTracker.Clear();
+    var refreshedSession = await LoadSession(db, id);
+    if (refreshedSession is null) return Results.NotFound();
+    await hubContext.PublishSession(refreshedSession, publicUrls.Origin(httpContext.Request), db, httpContext.RequestAborted);
+    return Results.Ok(refreshedSession.ToSnapshot(publicUrls.Origin(httpContext.Request), facilitator: true));
 }).RequireAuthorization();
 
 app.MapPost("/api/sessions/{id:guid}/questions", async (
