@@ -9,7 +9,7 @@ import { label, privacyText, hasAnswerOptions } from '../lib/session'
 import { Disclosure, ErrorNotice } from '../components/SessionUI'
 import { TemplateAssistant } from '../components/TemplateAssistant'
 import type { DesignerQuestionDraft, DesignerSectionDraft, QuestionModelCatalogItem, TemplateDraft, TemplateDefinition } from '../types'
-import { PresentationSlide } from '../components/PresentationSlide'
+import { PresentationSlide, splitPresentationBody } from '../components/PresentationSlide'
 
 function createQuestion(kind = 'ShortText'): DesignerQuestionDraft {
   return {
@@ -147,6 +147,28 @@ function DesignerEditor({ sourceId }: { sourceId: string | null }) {
 
   function updateSlideSetting(key: string, value: string) {
     updateQuestion({ settings: { ...(activeQuestion?.settings ?? {}), [key]: value } })
+  }
+
+  function splitActiveSlide() {
+    if (!activeQuestion || activeQuestion.kind !== 'Presentation' || !activeSection) return
+    const layout = activeQuestion.settings?.slideLayout ?? (activeQuestion.settings?.slideImageUrl ? 'media' : 'text')
+    const pages = splitPresentationBody(activeQuestion.prompt, layout)
+    if (pages.length < 2) return
+    const slides = pages.map((prompt, index): DesignerQuestionDraft => ({
+      ...activeQuestion,
+      key: index === 0 ? activeQuestion.key : `diapositiva-${crypto.randomUUID().slice(0, 8)}`,
+      prompt,
+      settings: {
+        ...(activeQuestion.settings ?? {}),
+        ...(index > 0 && activeQuestion.settings?.slideImageUrl ? { slideImageUrl: '', slideImageAlt: '', slideLayout: 'text' } : {}),
+        slideSequenceLabel: `Presentación · ${index + 1}/${pages.length}`,
+      },
+    }))
+    setSections(current => current.map((section, sectionIndex) => sectionIndex !== activeSectionIndex ? section : {
+      ...section,
+      questions: [...section.questions.slice(0, activeQuestionIndex), ...slides, ...section.questions.slice(activeQuestionIndex + 1)],
+    }))
+    setActiveQuestionIndex(activeQuestionIndex)
   }
 
   async function uploadSlideImage(event: React.ChangeEvent<HTMLInputElement>) {
@@ -296,7 +318,7 @@ function DesignerEditor({ sourceId }: { sourceId: string | null }) {
                 <label>Título pregunta<input value={activeQuestion.title} onChange={(event) => updateQuestion({ title: event.target.value })} /></label>
               </div>
               <label>{activeQuestion.kind === 'Presentation' ? 'Texto de la diapositiva' : 'Enunciado'}<textarea rows={4} value={activeQuestion.prompt} onChange={(event) => updateQuestion({ prompt: event.target.value })} /></label>
-              {activeQuestion.kind === 'Presentation' ? <section className="slide-editor"><label>Diseño<select value={activeQuestion.settings?.slideLayout ?? 'text'} onChange={event => updateSlideSetting('slideLayout', event.target.value)}><option value="title">Título</option><option value="text">Texto</option><option value="media">Imagen y texto</option><option value="quote">Cita</option></select></label><label>Imagen<input type="file" accept="image/jpeg,image/png,image/webp" onChange={uploadSlideImage} disabled={busy} /><span className="micro-copy">JPG, PNG o WebP · máximo 8 MB</span></label>{activeQuestion.settings?.slideImageUrl && <div className="slide-image-preview"><img src={activeQuestion.settings.slideImageUrl} alt="Vista previa de la diapositiva" /><button type="button" className="secondary-button" onClick={() => updateSlideSetting('slideImageUrl', '')}>Quitar imagen</button></div>}<label>Texto alternativo<input value={activeQuestion.settings?.slideImageAlt ?? ''} onChange={event => updateSlideSetting('slideImageAlt', event.target.value)} /></label><div className="form-grid"><label>Enlace opcional<input type="url" value={activeQuestion.settings?.slideLinkUrl ?? ''} onChange={event => updateSlideSetting('slideLinkUrl', event.target.value)} placeholder="https://" /></label><label>Texto del enlace<input value={activeQuestion.settings?.slideLinkLabel ?? ''} onChange={event => updateSlideSetting('slideLinkLabel', event.target.value)} placeholder="Abrir recurso" /></label></div></section> : ['Choice', 'Voting', 'Ranking', 'ColumnSort', 'Matrix'].includes(activeQuestion.kind) && <section className="option-editor"><h3>Opciones de respuesta</h3>{activeQuestion.options.map((option, index) => <div className="option-editor-row" key={option.id}><label className="sr-only" htmlFor={option.id}>Opción {index + 1}</label><input id={option.id} value={option.label} placeholder={`Opción ${index + 1}`} onChange={e => updateQuestion({ options: activeQuestion.options.map(o => o.id === option.id ? { ...o, label: e.target.value } : o) })} /><button className="icon-button" aria-label={`Eliminar opción ${index + 1}`} onClick={() => updateQuestion({ options: activeQuestion.options.filter(o => o.id !== option.id) })}><X size={16} /></button></div>)}<button className="secondary-button" onClick={() => updateQuestion({ options: [...activeQuestion.options, { id: crypto.randomUUID(), label: '' }] })}><Plus size={16} /> Añadir opción</button></section>}
+              {activeQuestion.kind === 'Presentation' ? <section className="slide-editor"><label>Diseño<select value={activeQuestion.settings?.slideLayout ?? 'text'} onChange={event => updateSlideSetting('slideLayout', event.target.value)}><option value="title">Título</option><option value="text">Texto</option><option value="media">Imagen y texto</option><option value="quote">Cita</option></select></label>{splitPresentationBody(activeQuestion.prompt, activeQuestion.settings?.slideLayout ?? 'text').length > 1 && <div className="slide-fit-notice" role="status"><div><strong>Este contenido necesita más aire</strong><p>Divídelo en {splitPresentationBody(activeQuestion.prompt, activeQuestion.settings?.slideLayout ?? 'text').length} diapositivas para mantener la legibilidad y evitar scroll en la proyección.</p></div><button type="button" className="secondary-button" onClick={splitActiveSlide}>Dividir contenido</button></div>}<label>Imagen<input type="file" accept="image/jpeg,image/png,image/webp" onChange={uploadSlideImage} disabled={busy} /><span className="micro-copy">JPG, PNG o WebP · máximo 8 MB</span></label>{activeQuestion.settings?.slideImageUrl && <div className="slide-image-preview"><img src={activeQuestion.settings.slideImageUrl} alt="Vista previa de la diapositiva" /><button type="button" className="secondary-button" onClick={() => updateSlideSetting('slideImageUrl', '')}>Quitar imagen</button></div>}<label>Texto alternativo<input value={activeQuestion.settings?.slideImageAlt ?? ''} onChange={event => updateSlideSetting('slideImageAlt', event.target.value)} /></label><div className="form-grid"><label>Enlace opcional<input type="url" value={activeQuestion.settings?.slideLinkUrl ?? ''} onChange={event => updateSlideSetting('slideLinkUrl', event.target.value)} placeholder="https://" /></label><label>Texto del enlace<input value={activeQuestion.settings?.slideLinkLabel ?? ''} onChange={event => updateSlideSetting('slideLinkLabel', event.target.value)} placeholder="Abrir recurso" /></label></div></section> : ['Choice', 'Voting', 'Ranking', 'ColumnSort', 'Matrix'].includes(activeQuestion.kind) && <section className="option-editor"><h3>Opciones de respuesta</h3>{activeQuestion.options.map((option, index) => <div className="option-editor-row" key={option.id}><label className="sr-only" htmlFor={option.id}>Opción {index + 1}</label><input id={option.id} value={option.label} placeholder={`Opción ${index + 1}`} onChange={e => updateQuestion({ options: activeQuestion.options.map(o => o.id === option.id ? { ...o, label: e.target.value } : o) })} /><button className="icon-button" aria-label={`Eliminar opción ${index + 1}`} onClick={() => updateQuestion({ options: activeQuestion.options.filter(o => o.id !== option.id) })}><X size={16} /></button></div>)}<button className="secondary-button" onClick={() => updateQuestion({ options: [...activeQuestion.options, { id: crypto.randomUUID(), label: '' }] })}><Plus size={16} /> Añadir opción</button></section>}
             </section>
           ) : null}
         </article>
