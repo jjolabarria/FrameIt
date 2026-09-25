@@ -176,6 +176,10 @@ public sealed class SessionDocumentationService : ISessionDocumentationService
                     {
                         question.Title,
                         question.Prompt,
+                        PublishedConsolidation = question.Consolidation?.Status == ConsolidationStatus.Published
+                            ? ResponseConsolidationLogic.ReadGroups(question.Consolidation.PublishedJson)
+                                .Select(group => new { group.Title, group.Summary, ResponseCount = group.ResponseIds.Count }).ToList()
+                            : null,
                         Responses = question.Responses
                             .OrderBy(response => response.CreatedAtUtc)
                             .Select(response => new
@@ -404,6 +408,13 @@ public sealed class SessionDocumentationService : ISessionDocumentationService
                 foreach (var question in section.Questions.OrderBy(x => x.Order))
                 {
                     column.Item().Element(block => RenderSection(block, question.Title, question.Prompt));
+                    if (question.Consolidation?.Status == ConsolidationStatus.Published)
+                    {
+                        var consolidated = ResponseConsolidationLogic.ReadGroups(question.Consolidation.PublishedJson)
+                            .Select(group => $"{group.Title} ({group.ResponseIds.Count} aportaciones): {group.Summary}").ToList();
+                        column.Item().Text("Síntesis asistida por IA · revisada y publicada por el facilitador").FontSize(10).SemiBold().FontColor("#47666a");
+                        column.Item().Element(block => RenderBulletSection(block, "Grupos consolidados", consolidated));
+                    }
                     var anonymous = TemplateMapper.DeserializePresentation(question.SettingsJson).ResponseIdentityMode == FrameIt.Contracts.ResponseIdentityMode.Anonymous;
                     var responses = question.Responses.OrderBy(x => x.CreatedAtUtc)
                         .Select(x => $"{(anonymous ? "Anónimo" : x.SessionParticipant?.DisplayName ?? "Anónimo")}: {x.Value}").ToList();

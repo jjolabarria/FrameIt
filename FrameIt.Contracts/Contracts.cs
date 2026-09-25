@@ -100,6 +100,15 @@ public sealed record DynamicTemplateSummaryDto(
     DateTimeOffset UpdatedAtUtc,
     bool IsArchived = false);
 
+public sealed record SessionJourneyPlaybackDto(string State, int PositionMs, DateTimeOffset? StartedAtUtc, int Revision, int DurationMs);
+public sealed record SessionJourneyBranchDto(string Label, int Votes, bool IsWinner);
+public sealed record SessionJourneyMilestoneDto(string Id, string Kind, string SectionTitle, string Title, int Metric,
+    IReadOnlyList<string> Topics, IReadOnlyList<SessionJourneyBranchDto> Branches);
+public sealed record SessionJourneyDto(Guid SessionId, string Title, bool IsInferred, int ParticipantCount,
+    int ResponseCount, IReadOnlyList<SessionJourneyMilestoneDto> Milestones, IReadOnlyList<OutcomeItemDto> Outcomes,
+    SessionJourneyPlaybackDto Playback);
+public sealed record UpdateJourneyPlaybackRequest(string Action, int? PositionMs = null);
+
 public sealed record ProjectSummaryDto(Guid Id, string Name, string Code, int SessionCount);
 
 public sealed record ClientSummaryDto(Guid Id, string Name, string Industry, IReadOnlyList<ProjectSummaryDto> Projects);
@@ -149,13 +158,15 @@ public sealed record SessionSnapshotDto(
     IReadOnlyDictionary<string, string> QuestionSettings,
     IReadOnlyList<ParticipantSummaryDto> Participants,
     IReadOnlyList<ResponseSummaryDto> Responses,
+    ResponseConsolidationDto? Consolidation,
     IReadOnlyList<OutcomeItemDto> Outcomes,
     SessionSatisfactionSummaryDto SatisfactionSurvey,
     IReadOnlyList<SessionQuestionItemDto> QuestionsToFacilitator,
     IReadOnlyList<SessionAttachmentDto> Attachments,
     DateTimeOffset UpdatedAtUtc,
     int? ResponseCount = null,
-    bool IsArchived = false);
+    bool IsArchived = false,
+    SessionJourneyPlaybackDto? JourneyPlayback = null);
 
 public sealed record SessionAgendaQuestionDto(Guid Id, string Title, int Order);
 public sealed record SessionAgendaSectionDto(Guid Id, string Title, int Order, IReadOnlyList<SessionAgendaQuestionDto> Questions);
@@ -163,6 +174,24 @@ public sealed record SessionAgendaSectionDto(Guid Id, string Title, int Order, I
 public sealed record ParticipantSummaryDto(Guid Id, string DisplayName, bool IsConnected, DateTimeOffset JoinedAtUtc);
 
 public sealed record ResponseSummaryDto(Guid Id, Guid? ParticipantId, string ParticipantName, string Value, DateTimeOffset CreatedAtUtc);
+
+public sealed record ConsolidationGroupDto(string Id, string Title, string Summary, IReadOnlyList<Guid> ResponseIds);
+
+public sealed record ResponseConsolidationDto(
+    string Status,
+    int SourceCount,
+    bool ShowConsolidated,
+    IReadOnlyList<ConsolidationGroupDto> Groups,
+    string? Error = null);
+
+public sealed record UpdateConsolidationRequest(IReadOnlyList<ConsolidationGroupDto> Groups);
+
+public sealed record UpdateConsolidationDisplayRequest(bool ShowConsolidated);
+
+public sealed record CreateVotingRoundRequest(
+    Guid SourceQuestionId,
+    string Title,
+    IReadOnlyList<QuestionOptionDto> Options);
 
 public sealed record OutcomeItemDto(string Bucket, string Text);
 

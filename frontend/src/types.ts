@@ -18,7 +18,13 @@ export type SessionSummary = {
 }
 export type ParticipantSummary = { id: string; displayName: string; isConnected: boolean }
 export type ResponseSummary = { id: string; participantName: string; value: string }
+export type ConsolidationGroup = { id: string; title: string; summary: string; responseIds: string[] }
+export type ResponseConsolidation = { status: string; sourceCount: number; showConsolidated: boolean; groups: ConsolidationGroup[]; error?: string | null }
 export type OutcomeItem = { bucket: string; text: string }
+export type JourneyPlayback = { state: 'Stopped' | 'Playing' | 'Paused'; positionMs: number; startedAtUtc?: string | null; revision: number; durationMs: number }
+export type JourneyBranch = { label: string; votes: number; isWinner: boolean }
+export type JourneyMilestone = { id: string; kind: 'presentation' | 'question' | 'consolidation' | 'vote'; sectionTitle: string; title: string; metric: number; topics: string[]; branches: JourneyBranch[] }
+export type SessionJourney = { sessionId: string; title: string; isInferred: boolean; participantCount: number; responseCount: number; milestones: JourneyMilestone[]; outcomes: OutcomeItem[]; playback: JourneyPlayback }
 export type SessionSatisfactionSummary = { responseCount: number; averageRating: number; responses?: { id: string; rating: number; comment: string; submittedAtUtc: string }[] }
 export type QuestionOption = { id: string; label: string; description?: string | null }
 export type QuestionRoundContext = { roundQuestionId: string | null; roundNumber: number | null; sectionTitle: string | null; roundTitle: string | null; phase: string; roundOpenedAtUtc: string | null; sessionElapsedSeconds: number | null; roundElapsedSeconds: number | null; sessionClockTracked: boolean }
@@ -59,10 +65,12 @@ export type SessionSnapshot = {
   questionSettings: Record<string, string>
   participants: ParticipantSummary[]
   responses: ResponseSummary[]
+  consolidation?: ResponseConsolidation | null
   outcomes: OutcomeItem[]
   satisfactionSurvey: SessionSatisfactionSummary
   questionsToFacilitator: SessionQuestionItem[]
   attachments: SessionAttachment[]
+  journeyPlayback?: JourneyPlayback | null
 }
 
 export type QuestionModelCatalogItem = {

@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using FrameIt.Api.Data;
 using FrameIt.Api.Hubs;
@@ -16,6 +17,7 @@ builder.Services.AddSingleton(publicUrls);
 builder.Services.AddOpenApi();
 builder.Services.AddSignalR();
 builder.Services.AddHostedService<RoundTimerService>();
+builder.AddResponseConsolidation();
 builder.Services.AddHttpClient<ISessionDocumentationService, SessionDocumentationService>((services, client) =>
 {
     var options = services.GetRequiredService<Microsoft.Extensions.Options.IOptions<OpenAiOptions>>().Value;
@@ -186,6 +188,32 @@ app.MapPost("/api/templates", async (CreateTemplateRequest request, AppDbContext
     return Results.Created($"/api/templates/{template.Id}", template.Id);
 }).RequireAuthorization();
 
+app.MapPut("/api/templates/{id:guid}", async (Guid id, CreateTemplateRequest request, AppDbContext db) =>
+{
+    if (TemplateValidation.Validate(request) is { } error) return Results.BadRequest(new { message = error });
+    var template = await db.DynamicTemplates
+        .Include(x => x.Sections)
+        .ThenInclude(x => x.Questions)
+        .FirstOrDefaultAsync(x => x.Id == id);
+    if (template is null) return Results.NotFound();
+    if (template.IsBuiltIn) return Results.Conflict(new { message = "Las plantillas incorporadas están protegidas. Puedes crear una variante propia." });
+    if (template.IsArchived) return Results.Conflict(new { message = "Restaura la plantilla antes de editarla." });
+    if (await db.DynamicTemplates.AnyAsync(x => x.Id != id && x.Key == request.Key))
+        return Results.Conflict(new { message = "Ya existe una plantilla con esa clave." });
+
+    var replacement = request.ToEntity();
+    template.Key = replacement.Key;
+    template.Title = replacement.Title;
+    template.Objective = replacement.Objective;
+    template.Audience = replacement.Audience;
+    template.FacilitatorGuidance = replacement.FacilitatorGuidance;
+    template.UpdatedAtUtc = DateTimeOffset.UtcNow;
+    db.Set<TemplateSection>().RemoveRange(template.Sections);
+    template.Sections = replacement.Sections;
+    await db.SaveChangesAsync();
+    return Results.NoContent();
+}).RequireAuthorization();
+
 app.MapPost("/api/templates/import", async (ImportTemplateEnvelope envelope, AppDbContext db) =>
 {
     if (db.CurrentOrganizationId is not Guid organizationId) return Results.BadRequest(new { message = "Selecciona una organización antes de importar una plantilla." });
@@ -332,6 +360,55 @@ app.MapGet("/api/sessions/by-code/{accessCode}", async (string accessCode, HttpC
     var baseUrl = publicUrls.Origin(httpContext.Request);
     return Results.Ok(session.ToSnapshot(baseUrl));
 });
+
+app.MapGet("/api/sessions/{id:guid}/journey", async (Guid id, AppDbContext db) =>
+{
+    var session = await LoadSession(db, id);
+    return session is null ? Results.NotFound() : Results.Ok(JourneyBuilder.Build(session));
+}).RequireAuthorization();
+
+app.MapGet("/api/sessions/by-code/{accessCode}/journey", async (string accessCode, AppDbContext db) =>
+{
+    var session = await LoadSessionByCode(db, accessCode.ToUpperInvariant());
+    if (session is null) return Results.NotFound();
+    if (session.JourneyPlaybackState == "Stopped") return Results.NotFound();
+    return Results.Ok(JourneyBuilder.Build(session));
+});
+
+app.MapPost("/api/sessions/{id:guid}/journey/playback", async (
+    Guid id, UpdateJourneyPlaybackRequest request, HttpContext httpContext, AppDbContext db,
+    IHubContext<SessionHub> hubContext) =>
+{
+    var session = await LoadSession(db, id);
+    if (session is null) return Results.NotFound();
+    if (session.Status != SessionStatus.Closed && session.Phase != SessionPhase.WrapUp)
+        return Results.Conflict(new { message = "Finaliza la sesión antes de mostrar su recorrido." });
+
+    var now = DateTimeOffset.UtcNow;
+    var position = session.JourneyPositionMs;
+    if (session.JourneyPlaybackState == "Playing" && session.JourneyStartedAtUtc is { } started)
+        position = Math.Min(JourneyBuilder.DurationMs, position + (int)(now - started).TotalMilliseconds);
+    var action = request.Action.Trim().ToLowerInvariant();
+    var milestoneCount = Math.Max(1, JourneyBuilder.Build(session).Milestones.Count);
+    var step = JourneyBuilder.DurationMs / milestoneCount;
+    switch (action)
+    {
+        case "start": case "restart": position = 0; session.JourneyPlaybackState = "Playing"; session.JourneyStartedAtUtc = now; break;
+        case "resume": session.JourneyPlaybackState = "Playing"; session.JourneyStartedAtUtc = now; break;
+        case "pause": session.JourneyPlaybackState = "Paused"; session.JourneyStartedAtUtc = null; break;
+        case "next": position = Math.Min(JourneyBuilder.DurationMs, position + step); session.JourneyPlaybackState = "Paused"; session.JourneyStartedAtUtc = null; break;
+        case "previous": position = Math.Max(0, position - step); session.JourneyPlaybackState = "Paused"; session.JourneyStartedAtUtc = null; break;
+        case "stop": position = 0; session.JourneyPlaybackState = "Stopped"; session.JourneyStartedAtUtc = null; break;
+        case "seek" when request.PositionMs is { } requested: position = Math.Clamp(requested, 0, JourneyBuilder.DurationMs); session.JourneyStartedAtUtc = session.JourneyPlaybackState == "Playing" ? now : null; break;
+        default: return Results.BadRequest(new { message = "Acción de reproducción no válida." });
+    }
+    session.JourneyPositionMs = position;
+    session.JourneyRevision++;
+    session.UpdatedAtUtc = now;
+    await db.SaveChangesAsync();
+    await hubContext.PublishSession(session, publicUrls.Origin(httpContext.Request), db);
+    return Results.Ok(JourneyBuilder.Build(session));
+}).RequireAuthorization();
 
 app.MapPost("/api/sessions/{id:guid}/join", async (
     Guid id,
@@ -496,6 +573,9 @@ app.MapPost("/api/sessions/{id:guid}/advance", async (
     session.SessionStartedAtUtc = nextSessionStartedAtUtc;
     session.UpdatedAtUtc = nextUpdatedAtUtc;
 
+    JourneyBuilder.Record(session, request.Phase.ToString(), nextActiveSectionId, nextActiveQuestionId);
+    await db.SaveChangesAsync();
+
     await transaction.CommitAsync();
 
     var baseUrl = publicUrls.Origin(httpContext.Request);
@@ -509,7 +589,8 @@ app.MapPost("/api/sessions/{id:guid}/round-state", async (
     UpdateRoundStateRequest request,
     HttpContext httpContext,
     IHubContext<SessionHub> hubContext,
-    AppDbContext db) =>
+    AppDbContext db,
+    ResponseConsolidationManager consolidations) =>
 {
     await using var transaction = await LifecycleEndpoints.ReuseSessionTransaction(db);
     await db.Database.ExecuteSqlInterpolatedAsync($"SELECT 1 FROM \"WorkshopSessions\" WHERE \"Id\" = {id} FOR UPDATE");
@@ -519,6 +600,8 @@ app.MapPost("/api/sessions/{id:guid}/round-state", async (
         return Results.NotFound();
     }
 
+    var closingQuestionId = session.ActiveQuestionId;
+    var wasRoundOpen = session.RoundOpen;
     var nextActiveSectionId = request.ActiveSectionId ?? session.ActiveSectionId;
     var nextActiveQuestionId = request.ActiveQuestionId ?? session.ActiveQuestionId;
     if (!session.Sections.Any(section => section.Id == nextActiveSectionId && section.Questions.Any(q => q.Id == nextActiveQuestionId)))
@@ -559,7 +642,13 @@ app.MapPost("/api/sessions/{id:guid}/round-state", async (
     session.SessionStartedAtUtc = nextSessionStartedAtUtc;
     session.UpdatedAtUtc = nextUpdatedAtUtc;
 
+    JourneyBuilder.Record(session, request.Phase.ToString(), nextActiveSectionId, nextActiveQuestionId);
+    await db.SaveChangesAsync();
+
     await transaction.CommitAsync();
+
+    if (wasRoundOpen && !nextRoundOpen && closingQuestionId is Guid closedQuestionId) await consolidations.QueueAsync(closedQuestionId);
+    if (nextRoundOpen && nextActiveQuestionId is Guid reopenedQuestionId) await consolidations.InvalidateAsync(reopenedQuestionId);
 
     var baseUrl = publicUrls.Origin(httpContext.Request);
     var snapshot = session.ToSnapshot(baseUrl, facilitator: true);
@@ -572,7 +661,8 @@ app.MapPost("/api/sessions/{id:guid}/responses", async (
     SubmitResponseRequest request,
     HttpContext httpContext,
     IHubContext<SessionHub> hubContext,
-    AppDbContext db) =>
+    AppDbContext db,
+    ResponseConsolidationManager consolidations) =>
 {
     var session = await LoadSession(db, id);
     if (session is null)
@@ -594,6 +684,9 @@ app.MapPost("/api/sessions/{id:guid}/responses", async (
         return Results.Conflict(new { message = "La pregunta ha cambiado. Tu borrador se conserva; revisa la pregunta actual." });
     if (string.IsNullOrWhiteSpace(request.Value))
         return Results.BadRequest(new { message = "Escribe una respuesta antes de enviarla." });
+    if (question.Kind == QuestionKind.Voting && !TemplateMapper.DeserializeOptions(question.OptionsJson)
+            .Any(option => string.Equals(option.Label, request.Value.Trim(), StringComparison.Ordinal)))
+        return Results.BadRequest(new { message = "Selecciona una de las opciones disponibles." });
     var presentation = TemplateMapper.DeserializePresentation(question.SettingsJson);
     if ((!session.RoundOpen || RoundTimerService.HasExpired(session, presentation.TimerSeconds, DateTimeOffset.UtcNow)) && !presentation.AllowLateResponses)
     {
@@ -621,6 +714,7 @@ app.MapPost("/api/sessions/{id:guid}/responses", async (
     }
 
     await db.SaveChangesAsync();
+    await consolidations.InvalidateAsync(question.Id);
     var updatedAtUtc = DateTimeOffset.UtcNow;
     await db.WorkshopSessions
         .Where(x => x.Id == session.Id)
@@ -659,6 +753,7 @@ app.MapPost("/api/sessions/{id:guid}/outcomes", async (
         Bucket = request.Bucket.Trim(),
         Text = request.Text.Trim()
     });
+    JourneyBuilder.Record(session, "OutcomeAdded", session.ActiveSectionId, session.ActiveQuestionId);
     session.UpdatedAtUtc = DateTimeOffset.UtcNow;
     await db.SaveChangesAsync();
 
@@ -666,6 +761,129 @@ app.MapPost("/api/sessions/{id:guid}/outcomes", async (
     var snapshot = session.ToSnapshot(baseUrl, facilitator: true);
     await hubContext.PublishSession(session, baseUrl, db);
     return Results.Ok(snapshot);
+}).RequireAuthorization();
+
+app.MapPost("/api/sessions/{id:guid}/questions/{questionId:guid}/consolidation/regenerate", async (
+    Guid id, Guid questionId, HttpContext httpContext, AppDbContext db, ResponseConsolidationManager manager,
+    IHubContext<SessionHub> hubContext) =>
+{
+    var session = await LoadSession(db, id);
+    var question = session?.Sections.SelectMany(x => x.Questions).FirstOrDefault(x => x.Id == questionId);
+    if (session is null || question is null) return Results.NotFound();
+    if (!ResponseConsolidationLogic.Eligible(question.Kind) || question.Responses.Count < 3)
+        return Results.BadRequest(new { message = "Se necesitan al menos tres respuestas de texto libre." });
+    await manager.QueueAsync(questionId, force: true, httpContext.RequestAborted);
+    db.ChangeTracker.Clear();
+    session = await LoadSession(db, id);
+    await hubContext.PublishSession(session!, publicUrls.Origin(httpContext.Request), db, httpContext.RequestAborted);
+    return Results.Ok(session!.ToSnapshot(publicUrls.Origin(httpContext.Request), facilitator: true));
+}).RequireAuthorization();
+
+app.MapPut("/api/sessions/{id:guid}/questions/{questionId:guid}/consolidation", async (
+    Guid id, Guid questionId, UpdateConsolidationRequest request, HttpContext httpContext, AppDbContext db,
+    IHubContext<SessionHub> hubContext) =>
+{
+    var session = await LoadSession(db, id);
+    var question = session?.Sections.SelectMany(x => x.Questions).FirstOrDefault(x => x.Id == questionId);
+    if (session is null || question?.Consolidation is null) return Results.NotFound();
+    if (question.Consolidation.Status is not (ConsolidationStatus.Ready or ConsolidationStatus.Published))
+        return Results.Conflict(new { message = "La consolidación todavía no está lista para editar." });
+    if (ResponseConsolidationLogic.ValidateGroups(request.Groups, question.Responses) is { } error)
+        return Results.BadRequest(new { message = error });
+    question.Consolidation.DraftJson = JsonSerializer.Serialize(request.Groups, ResponseConsolidationLogic.Json);
+    question.Consolidation.Status = ConsolidationStatus.Ready;
+    question.Consolidation.ShowConsolidated = false;
+    question.Consolidation.UpdatedAtUtc = DateTimeOffset.UtcNow;
+    await db.SaveChangesAsync(httpContext.RequestAborted);
+    await hubContext.PublishSession(session, publicUrls.Origin(httpContext.Request), db, httpContext.RequestAborted);
+    return Results.Ok(session.ToSnapshot(publicUrls.Origin(httpContext.Request), facilitator: true));
+}).RequireAuthorization();
+
+app.MapPost("/api/sessions/{id:guid}/questions/{questionId:guid}/consolidation/publish", async (
+    Guid id, Guid questionId, HttpContext httpContext, AppDbContext db, IHubContext<SessionHub> hubContext) =>
+{
+    var session = await LoadSession(db, id);
+    var question = session?.Sections.SelectMany(x => x.Questions).FirstOrDefault(x => x.Id == questionId);
+    var item = question?.Consolidation;
+    if (session is null || question is null || item is null) return Results.NotFound();
+    if (item.Status != ConsolidationStatus.Ready || ResponseConsolidationLogic.Fingerprint(question.Responses) != item.SourceFingerprint)
+        return Results.Conflict(new { message = "La consolidación no está lista o las respuestas han cambiado." });
+    item.PublishedJson = item.DraftJson;
+    item.Status = ConsolidationStatus.Published;
+    item.ShowConsolidated = true;
+    item.UpdatedAtUtc = DateTimeOffset.UtcNow;
+    JourneyBuilder.Record(session, "ConsolidationPublished", session.ActiveSectionId, question.Id);
+    await db.SaveChangesAsync(httpContext.RequestAborted);
+    await hubContext.PublishSession(session, publicUrls.Origin(httpContext.Request), db, httpContext.RequestAborted);
+    return Results.Ok(session.ToSnapshot(publicUrls.Origin(httpContext.Request), facilitator: true));
+}).RequireAuthorization();
+
+app.MapPut("/api/sessions/{id:guid}/questions/{questionId:guid}/consolidation/display", async (
+    Guid id, Guid questionId, UpdateConsolidationDisplayRequest request, HttpContext httpContext, AppDbContext db,
+    IHubContext<SessionHub> hubContext) =>
+{
+    var session = await LoadSession(db, id);
+    var item = session?.Sections.SelectMany(x => x.Questions).FirstOrDefault(x => x.Id == questionId)?.Consolidation;
+    if (session is null || item is null) return Results.NotFound();
+    if (item.Status != ConsolidationStatus.Published)
+        return Results.Conflict(new { message = "Publica la consolidación antes de mostrarla." });
+    item.ShowConsolidated = request.ShowConsolidated;
+    item.UpdatedAtUtc = DateTimeOffset.UtcNow;
+    await db.SaveChangesAsync(httpContext.RequestAborted);
+    await hubContext.PublishSession(session, publicUrls.Origin(httpContext.Request), db, httpContext.RequestAborted);
+    return Results.Ok(session.ToSnapshot(publicUrls.Origin(httpContext.Request), facilitator: true));
+}).RequireAuthorization();
+
+app.MapPost("/api/sessions/{id:guid}/voting-rounds", async (
+    Guid id, CreateVotingRoundRequest request, HttpContext httpContext, AppDbContext db,
+    IHubContext<SessionHub> hubContext) =>
+{
+    await using var transaction = await LifecycleEndpoints.ReuseSessionTransaction(db);
+    await db.Database.ExecuteSqlInterpolatedAsync($"SELECT 1 FROM \"WorkshopSessions\" WHERE \"Id\" = {id} FOR UPDATE");
+    var session = await LoadSession(db, id);
+    if (session is null) return Results.NotFound();
+    if (session.IsArchived || session.Status == SessionStatus.Closed)
+        return Results.Conflict(new { message = "La sesión ya no admite nuevas votaciones." });
+    var sourceSection = session.Sections.FirstOrDefault(section => section.Questions.Any(question => question.Id == request.SourceQuestionId));
+    var source = sourceSection?.Questions.FirstOrDefault(question => question.Id == request.SourceQuestionId);
+    var title = request.Title.Trim();
+    var options = request.Options.Select(option => option with { Id = option.Id.Trim(), Label = option.Label.Trim(), Description = null }).ToArray();
+    if (sourceSection is null || source is null) return Results.BadRequest(new { message = "El resultado de origen no pertenece a esta sesión." });
+    if (title.Length is < 1 or > 300 || options.Length is < 2 or > 12 ||
+        options.Any(option => option.Id.Length is < 1 or > 160 || option.Label.Length is < 1 or > 240) ||
+        options.Select(option => option.Id).Distinct(StringComparer.OrdinalIgnoreCase).Count() != options.Length ||
+        options.Select(option => option.Label).Distinct(StringComparer.OrdinalIgnoreCase).Count() != options.Length)
+        return Results.BadRequest(new { message = "La votación necesita un título y entre 2 y 12 opciones válidas." });
+
+    foreach (var later in sourceSection.Questions.Where(question => question.Order > source.Order)) later.Order++;
+    var vote = new SessionQuestion
+    {
+        SessionSectionId = sourceSection.Id,
+        Key = $"votacion-{Guid.NewGuid():N}",
+        Kind = QuestionKind.Voting,
+        Title = title,
+        Prompt = "Elige la opción que debería orientar el siguiente paso de la sesión.",
+        Order = source.Order + 1,
+        OptionsJson = JsonSerializer.Serialize(options),
+        SettingsJson = JsonSerializer.Serialize(new Dictionary<string, string>
+        {
+            ["timerSeconds"] = "60", ["responseVisibility"] = "Live", ["responseIdentityMode"] = "Anonymous",
+            ["showProgress"] = "true", ["allowLateResponses"] = "false", ["celebrationStyle"] = "Subtle",
+            ["sourceQuestionId"] = source.Id.ToString()
+        })
+    };
+    sourceSection.Questions.Add(vote);
+    session.ActiveSectionId = sourceSection.Id;
+    session.ActiveQuestionId = vote.Id;
+    session.Phase = SessionPhase.Waiting;
+    session.RoundOpen = false;
+    session.ResultsVisible = false;
+    session.RoundOpenedAtUtc = null;
+    session.UpdatedAtUtc = DateTimeOffset.UtcNow;
+    await db.SaveChangesAsync(httpContext.RequestAborted);
+    await transaction.CommitAsync();
+    await hubContext.PublishSession(session, publicUrls.Origin(httpContext.Request), db, httpContext.RequestAborted);
+    return Results.Ok(session.ToSnapshot(publicUrls.Origin(httpContext.Request), facilitator: true));
 }).RequireAuthorization();
 
 app.MapPost("/api/sessions/{id:guid}/questions", async (
@@ -955,6 +1173,10 @@ static async Task<WorkshopSession?> LoadSession(AppDbContext db, Guid id)
         .ThenInclude(x => x.SessionParticipant)
         .Include(x => x.Attachments)
         .ThenInclude(x => x.SessionParticipant)
+        .Include(x => x.JourneyEvents)
+        .Include(x => x.Sections.OrderBy(section => section.Order))
+        .ThenInclude(x => x.Questions.OrderBy(question => question.Order))
+        .ThenInclude(x => x.Consolidation)
         .Include(x => x.Sections.OrderBy(section => section.Order))
         .ThenInclude(x => x.Questions.OrderBy(question => question.Order))
         .ThenInclude(x => x.Responses)
@@ -975,6 +1197,10 @@ static Task<WorkshopSession?> LoadSessionByCode(AppDbContext db, string accessCo
         .ThenInclude(x => x.SessionParticipant)
         .Include(x => x.Attachments)
         .ThenInclude(x => x.SessionParticipant)
+        .Include(x => x.JourneyEvents)
+        .Include(x => x.Sections.OrderBy(section => section.Order))
+        .ThenInclude(x => x.Questions.OrderBy(question => question.Order))
+        .ThenInclude(x => x.Consolidation)
         .Include(x => x.Sections.OrderBy(section => section.Order))
         .ThenInclude(x => x.Questions.OrderBy(question => question.Order))
         .ThenInclude(x => x.Responses)

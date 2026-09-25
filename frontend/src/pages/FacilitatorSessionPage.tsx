@@ -1,7 +1,7 @@
 import { LifecycleActions } from '../components/LifecycleActions'
 import { useEffect, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, ArrowRight, Play, Square, Eye, MonitorUp, Users, MessageSquare, Paperclip } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Play, Square, Eye, MonitorUp, Users, MessageSquare, Paperclip, Pause, SkipBack, SkipForward, RotateCcw, Route } from 'lucide-react'
 import { useFacilitatorAuth } from '../hooks/useFacilitatorAuth'
 import { api, formatBytes, getTimeRemaining } from '../lib/api'
 import { formatTime, privacyText } from '../lib/session'
@@ -16,6 +16,8 @@ import { QuestionNotification } from '../components/QuestionNotification'
 import { SessionActionsMenu } from '../components/SessionActionsMenu'
 import { AnimatePresence } from 'motion/react'
 import { PresentationSlide } from '../components/PresentationSlide'
+import { ConsolidationReview } from '../components/ResponseConsolidation'
+import { VoteFromResults, VotingResults } from '../components/VoteFromResults'
 
 export function FacilitatorSessionPage() {
   const { sessionId = '' } = useParams()
@@ -34,7 +36,7 @@ export function FacilitatorSessionPage() {
     const controller = new AbortController()
     void api<SessionAgendaSection[]>(`/api/sessions/${sessionId}/agenda`, { signal: controller.signal }).then(setAgenda).catch(e => { if (!controller.signal.aborted) setError(e.message) })
     return () => controller.abort()
-  }, [auth.isAuthenticated, sessionId, setError])
+  }, [auth.isAuthenticated, sessionId, setError, snapshot?.questionCount])
 
   async function mutate(path: string, body?: unknown, method = 'POST') {
     if (snapshot?.isArchived) return
@@ -59,6 +61,13 @@ export function FacilitatorSessionPage() {
       const link = document.createElement('a'); link.href = url; link.download = 'documentacion-sesion.pdf'; link.click()
       setTimeout(() => URL.revokeObjectURL(url), 1000)
     } catch (reason) { setError((reason as Error).message) } finally { setBusy(false) }
+  }
+  async function controlJourney(action: string, openProjection = false) {
+    const projection = openProjection && snapshot ? window.open(`/proyeccion/${snapshot.accessCode}`, '_blank', 'noopener,noreferrer') : null
+    setBusy(true); setError('')
+    try { await api(`/api/sessions/${sessionId}/journey/playback`, { method: 'POST', body: JSON.stringify({ action }) }) }
+    catch (reason) { projection?.close(); setError((reason as Error).message) }
+    finally { setBusy(false) }
   }
   const questions = agenda.flatMap(s => s.questions.map(q => ({ ...q, sectionId: s.id })))
   const currentIndex = questions.findIndex(q => q.id === snapshot?.activeQuestionId)
@@ -126,11 +135,21 @@ export function FacilitatorSessionPage() {
             {snapshot.phase === 'WrapUp' && <p role="status" className="success-copy">Sesión finalizada. La valoración está cerrada.</p>}
 
           </div>
+          {(snapshot.status === 'Closed' || snapshot.phase === 'WrapUp') && <section className="journey-controls" aria-label="Controles del recorrido proyectado">
+            <div><Route size={20} /><div><strong>Recorrido de la sesión</strong><p>Una ruta 3D con temas, participación, votaciones y acuerdos.</p></div></div>
+            {snapshot.journeyPlayback?.state === 'Stopped' || !snapshot.journeyPlayback ? <button className="primary-button" disabled={!auth.isAuthenticated || busy} onClick={() => void controlJourney('start', true)}><Play size={17} /> Mostrar recorrido</button> : <div className="journey-control-buttons">
+              <button className="secondary-button" aria-label="Hito anterior" disabled={busy} onClick={() => void controlJourney('previous')}><SkipBack size={17} /></button>
+              {snapshot.journeyPlayback.state === 'Playing' ? <button className="primary-button" disabled={busy} onClick={() => void controlJourney('pause')}><Pause size={17} /> Pausar</button> : <button className="primary-button" disabled={busy} onClick={() => void controlJourney('resume')}><Play size={17} /> Continuar</button>}
+              <button className="secondary-button" aria-label="Hito siguiente" disabled={busy} onClick={() => void controlJourney('next')}><SkipForward size={17} /></button>
+              <button className="secondary-button" disabled={busy} onClick={() => void controlJourney('restart')}><RotateCcw size={17} /> Reiniciar</button>
+              <button className="secondary-button" disabled={busy} onClick={() => void controlJourney('stop')}><Square size={17} /> Salir</button>
+            </div>}
+          </section>}
           {confirmation && <div className="confirmation" role="alert"><p>{confirmation.text}</p><div className="action-row"><button autoFocus className="secondary-button" disabled={busy} onClick={() => setConfirmation(null)}>Cancelar</button><button className="primary-button" disabled={!canControl} onClick={() => void confirmation.action()}>Confirmar</button></div></div>}
           {snapshot.questionKind !== 'Presentation' && <p className="privacy-note">{privacyText(snapshot).replaceAll('tu respuesta', 'las respuestas').replaceAll('Tu respuesta', 'Las respuestas').replace('verá las respuestas', 'verá las respuestas').replace('se comparte', 'se comparten').replace('aparecerá', 'aparecerán').replace('Se mostrará', 'Se mostrarán').replace('tu nombre', 'el nombre de cada participante')}</p>}
           {snapshot.phase === 'Lobby' ? <section className="lobby-share"><div className="access-qr" role="img" aria-label="Código QR para entrar a la sesión" dangerouslySetInnerHTML={{ __html: snapshot.qrSvg }} /><div><p className="section-label">Todo listo para empezar</p><h3>Invita al grupo</h3><strong className="access-code">{snapshot.accessCode}</strong><a className="access-url" href={snapshot.joinUrl} target="_blank" rel="noreferrer">{snapshot.joinUrl}</a><CopyButton value={snapshot.joinUrl} /></div></section>
-            : snapshot.questionKind === 'Presentation' ? <section className="response-section presentation-status"><p className="muted-copy">La diapositiva está visible en la proyección. Avanza cuando quieras continuar el guion.</p></section> : <section className="response-section"><div className="panel-head"><h3>Respuestas del grupo</h3><span className="meta-chip">{snapshot.responseVisibility === 'FacilitatorOnly' ? 'Solo facilitador' : snapshot.resultsVisible || snapshot.responseVisibility === 'Live' ? 'Compartidas con el grupo' : 'Pendientes de publicar'}</span></div>
-              {snapshot.responses.length ? <div className="response-list">{snapshot.responses.map(r => <article key={r.id}><span>{r.participantName}</span><p>{r.value}</p></article>)}</div> : <div className="empty-state"><strong>Aún no hay respuestas</strong><p>{snapshot.roundOpen ? 'El grupo puede responder desde su dispositivo.' : 'Abre la ronda para empezar a recoger ideas.'}</p></div>}
+            : snapshot.questionKind === 'Presentation' ? <section className="response-section presentation-status"><p className="muted-copy">La diapositiva está visible en la proyección. Avanza cuando quieras continuar el guion.</p></section> : <section className="response-section">{snapshot.consolidation && <ConsolidationReview sessionId={sessionId} questionId={snapshot.activeQuestionId} consolidation={snapshot.consolidation} disabled={!canControl} onSnapshot={setSnapshot} />}<VoteFromResults key={snapshot.activeQuestionId} snapshot={snapshot} disabled={!canControl || snapshot.roundOpen} onCreated={setSnapshot} /><div className="panel-head"><h3>{snapshot.questionKind === 'Voting' ? 'Resultado de la votación' : 'Respuestas originales'}</h3><span className="meta-chip">{snapshot.responseVisibility === 'FacilitatorOnly' ? 'Solo facilitador' : snapshot.resultsVisible || snapshot.responseVisibility === 'Live' ? 'Compartidas con el grupo' : 'Pendientes de publicar'}</span></div>
+              {snapshot.questionKind === 'Voting' ? <VotingResults options={snapshot.options} responses={snapshot.responses} /> : snapshot.responses.length ? <div className="response-list">{snapshot.responses.map(r => <article key={r.id}><span>{r.participantName}</span><p>{r.value}</p></article>)}</div> : <div className="empty-state"><strong>Aún no hay respuestas</strong><p>{snapshot.roundOpen ? 'El grupo puede responder desde su dispositivo.' : 'Abre la ronda para empezar a recoger ideas.'}</p></div>}
             </section>}
         </section>
       </div>

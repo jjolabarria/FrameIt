@@ -180,6 +180,19 @@ public static class TemplateMapper
         var satisfactionAverageRating = satisfactionResponseCount == 0
             ? 0
             : Math.Round(session.SatisfactionResponses.Average(x => x.Rating), 1);
+        ResponseConsolidationDto? consolidation = null;
+        if (activeQuestion.Consolidation is { } stored)
+        {
+            var publicPublished = stored.Status == ConsolidationStatus.Published;
+            if (facilitator || (publicPublished && showResponses))
+            {
+                var groups = ResponseConsolidationLogic.ReadGroups(facilitator && stored.Status != ConsolidationStatus.Published
+                    ? stored.DraftJson : stored.PublishedJson);
+                consolidation = new ResponseConsolidationDto(
+                    stored.Status, stored.SourceCount, stored.ShowConsolidated && publicPublished, groups,
+                    facilitator ? stored.Error : null);
+            }
+        }
 
         return new SessionSnapshotDto(
             session.Id,
@@ -226,6 +239,7 @@ public static class TemplateMapper
                         x.CreatedAtUtc))
                     .ToList()
                 : [],
+            consolidation,
             session.Outcomes.Select(x => new OutcomeItemDto(x.Bucket, x.Text)).ToList(),
             new SessionSatisfactionSummaryDto(satisfactionResponseCount, satisfactionAverageRating,
                 facilitator ? session.SatisfactionResponses.OrderByDescending(x => x.SubmittedAtUtc)
@@ -251,7 +265,7 @@ public static class TemplateMapper
                     x.UploadedAtUtc))
                 .ToList(),
             session.UpdatedAtUtc,
-            facilitator ? activeQuestion.Responses.Count : null, session.IsArchived);
+            facilitator ? activeQuestion.Responses.Count : null, session.IsArchived, JourneyBuilder.Playback(session));
     }
 
     public static IReadOnlyList<QuestionOptionDto> DeserializeOptions(string json)

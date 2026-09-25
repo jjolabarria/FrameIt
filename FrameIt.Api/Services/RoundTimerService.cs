@@ -23,6 +23,7 @@ public sealed class RoundTimerService(
             {
                 await using var scope = scopeFactory.CreateAsyncScope();
                 var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                var consolidations = scope.ServiceProvider.GetRequiredService<ResponseConsolidationManager>();
                 var rounds = await db.WorkshopSessions.AsNoTracking()
                     .Where(s => s.RoundOpen && s.RoundOpenedAtUtc != null)
                     .Include(s => s.Sections).ThenInclude(s => s.Questions)
@@ -43,6 +44,9 @@ public sealed class RoundTimerService(
                             .SetProperty(s => s.Phase, SessionPhase.Waiting)
                             .SetProperty(s => s.UpdatedAtUtc, DateTimeOffset.UtcNow), stoppingToken);
                     if (changed == 0) continue;
+
+                    if (round.ActiveQuestionId is Guid closedQuestionId)
+                        await consolidations.QueueAsync(closedQuestionId, cancellationToken: stoppingToken);
 
                     // Each audience reloads its own authorized snapshot, retaining the external host/port.
                     var privateGroups = await SessionBroadcast.PrivateGroups(db, round.AccessCode, stoppingToken);

@@ -9,7 +9,8 @@ import { label, privacyText, hasAnswerOptions } from '../lib/session'
 import { Disclosure, ErrorNotice } from '../components/SessionUI'
 import { TemplateAssistant } from '../components/TemplateAssistant'
 import type { DesignerQuestionDraft, DesignerSectionDraft, QuestionModelCatalogItem, TemplateDraft, TemplateDefinition } from '../types'
-import { PresentationSlide, splitPresentationBody } from '../components/PresentationSlide'
+import { PresentationSlide } from '../components/PresentationSlide'
+import { splitPresentationBody } from '../lib/presentation'
 
 function createQuestion(kind = 'ShortText'): DesignerQuestionDraft {
   return {
@@ -32,10 +33,11 @@ function createQuestion(kind = 'ShortText'): DesignerQuestionDraft {
 export function DesignerPage() {
   const [searchParams] = useSearchParams()
   const sourceId = searchParams.get('from')
-  return <DesignerEditor key={sourceId ?? 'new'} sourceId={sourceId} />
+  const editId = searchParams.get('edit')
+  return <DesignerEditor key={editId ? `edit-${editId}` : sourceId ? `from-${sourceId}` : 'new'} sourceId={editId ?? sourceId} editId={editId} />
 }
 
-function DesignerEditor({ sourceId }: { sourceId: string | null }) {
+function DesignerEditor({ sourceId, editId }: { sourceId: string | null; editId: string | null }) {
   const navigate = useNavigate()
   const [sourceLoading, setSourceLoading] = useState(!!sourceId)
   const [sourceError, setSourceError] = useState('')
@@ -63,12 +65,12 @@ function DesignerEditor({ sourceId }: { sourceId: string | null }) {
     const controller = new AbortController()
     void api<TemplateDefinition>(`/api/templates/${encodeURIComponent(sourceId)}`, { signal: controller.signal }).then(source => {
       if (controller.signal.aborted) return
-      setTitle(`${source.title.slice(0, 189)} — variante`); setObjective(source.objective); setAudience(source.audience)
+      setTitle(editId ? source.title : `${source.title.slice(0, 189)} — variante`); setKey(editId ? source.key : `dinamica-${crypto.randomUUID().slice(0, 8)}`); setObjective(source.objective); setAudience(source.audience)
       setGuidance(source.facilitatorGuidance ?? ''); setSections(source.sections); setActiveSectionIndex(0); setActiveQuestionIndex(0)
       setSourceLoading(false)
     }).catch((reason: Error) => { if (!controller.signal.aborted) { setSourceError(reason.message); setSourceLoading(false) } })
     return () => controller.abort()
-  }, [sourceId])
+  }, [editId, sourceId])
 
   useEffect(() => {
     void api<QuestionModelCatalogItem[]>('/api/catalog/question-models').then(setCatalog).catch((reason: Error) => setError(reason.message))
@@ -215,7 +217,7 @@ function DesignerEditor({ sourceId }: { sourceId: string | null }) {
     setBusy(true)
     setError('')
     try {
-      await api('/api/templates', { method: 'POST', body: JSON.stringify({ key, title, objective, audience, facilitatorGuidance: guidance, sections }) })
+      await api(editId ? `/api/templates/${encodeURIComponent(editId)}` : '/api/templates', { method: editId ? 'PUT' : 'POST', body: JSON.stringify({ key, title, objective, audience, facilitatorGuidance: guidance, sections }) })
       saved.current = true
       navigate('/plantillas')
     } catch (reason) {
@@ -235,14 +237,15 @@ function DesignerEditor({ sourceId }: { sourceId: string | null }) {
           <button className="secondary-button" type="button" disabled={sourceLoading || !!sourceError} aria-expanded={showAssistant} onClick={() => { setShowAssistant(!showAssistant); setPreview(false) }}>{showAssistant ? 'Volver al editor manual' : 'Diseñar con IA'}</button>
           <button className="secondary-button" aria-pressed={preview} onClick={() => setPreview(!preview)}><Eye size={16} />{preview ? 'Volver al editor' : 'Vista del participante'}</button><Link className="secondary-link" to="/plantillas"><ArrowLeft size={16} /> Biblioteca</Link>
           {!auth.isAuthenticated ? <button className="secondary-button" disabled={authBusy} onClick={() => void login()} type="button">Entrar</button> : null}
-          <button className="primary-button" disabled={busy || authBusy || !auth.isAuthenticated || sourceLoading || !!sourceError} onClick={saveTemplate} type="button"><Save size={16} /> {sourceId ? 'Guardar variante' : 'Guardar'}</button>
+          <button className="primary-button" disabled={busy || authBusy || !auth.isAuthenticated || sourceLoading || !!sourceError} onClick={saveTemplate} type="button"><Save size={16} /> {editId ? 'Guardar cambios' : sourceId ? 'Guardar variante' : 'Guardar'}</button>
         </>
       }
     >
       <ErrorNotice message={error || authError} />
       {sourceLoading && <p role="status">Preparando variante…</p>}
       <ErrorNotice message={sourceError} />
-      {sourceId && !sourceLoading && !sourceError && <p className="micro-copy">Estás creando una variante. La plantilla original se conserva.</p>}
+      {editId && !sourceLoading && !sourceError && <p className="micro-copy">Estás editando esta plantilla. Las sesiones ya creadas conservan su contenido original.</p>}
+      {sourceId && !editId && !sourceLoading && !sourceError && <p className="micro-copy">Estás creando una variante. La plantilla original se conserva.</p>}
       {blocker.state === 'blocked' && <div className="confirmation" role="alert"><strong>Tienes cambios sin guardar</strong><p>Si sales ahora perderás los cambios de esta plantilla.</p><div className="action-row"><button autoFocus className="primary-button" onClick={() => blocker.reset()}>Seguir editando</button><button className="secondary-button" onClick={() => blocker.proceed()}>Salir sin guardar</button></div></div>}
       <p className="micro-copy" role="status">{dirty ? 'Cambios sin guardar' : 'Nueva plantilla'}</p>
       {preview && activeQuestion && <section className="panel"><div className="panel-head"><h2>{activeQuestion.kind === 'Presentation' ? 'Así verá la diapositiva la sala' : 'Así verá la pregunta el participante'}</h2><span className="meta-chip">Vista previa · no envía respuestas</span></div>{activeQuestion.kind === 'Presentation' ? <div className="presentation-preview"><AnimatePresence mode="wait"><PresentationSlide key={activeQuestion.key} title={activeQuestion.title} body={activeQuestion.prompt} settings={activeQuestion.settings ?? undefined} /></AnimatePresence></div> : <div className="participant-shell"><div className="preview-question"><p className="section-label">{activeSection.title}</p><h2>{activeQuestion.title}</h2><p>{activeQuestion.prompt}</p>{hasAnswerOptions(activeQuestion.kind) && activeQuestion.options.map(o => <label className="option-radio" key={o.id}><input type="radio" name="preview" /><span>{o.label || 'Opción sin texto'}</span></label>)}<label>Tu respuesta<textarea rows={3} placeholder="Comparte tu idea…" /></label><button className="primary-button" disabled>Enviar respuesta</button><p className="privacy-note">{privacyText(activeQuestion.presentation)}</p></div></div>}</section>}

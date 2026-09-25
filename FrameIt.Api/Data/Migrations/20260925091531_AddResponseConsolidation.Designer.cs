@@ -3,6 +3,7 @@ using System;
 using FrameIt.Api.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace FrameIt.Api.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260925091531_AddResponseConsolidation")]
+    partial class AddResponseConsolidation
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -536,20 +539,6 @@ namespace FrameIt.Api.Data.Migrations
                     b.ToTable("SessionAttachments");
                 });
 
-            modelBuilder.Entity("FrameIt.Api.Data.SessionJourneyEvent", b =>
-                {
-                    b.Property<Guid>("Id").ValueGeneratedOnAdd().HasColumnType("uuid");
-                    b.Property<string>("EventType").IsRequired().HasMaxLength(40).HasColumnType("character varying(40)");
-                    b.Property<string>("MetadataJson").IsRequired().HasColumnType("jsonb");
-                    b.Property<DateTimeOffset>("OccurredAtUtc").HasColumnType("timestamp with time zone");
-                    b.Property<Guid?>("SessionQuestionId").HasColumnType("uuid");
-                    b.Property<Guid?>("SessionSectionId").HasColumnType("uuid");
-                    b.Property<Guid>("WorkshopSessionId").HasColumnType("uuid");
-                    b.HasKey("Id");
-                    b.HasIndex("WorkshopSessionId", "OccurredAtUtc");
-                    b.ToTable("SessionJourneyEvents");
-                });
-
             modelBuilder.Entity("FrameIt.Api.Data.SessionOutcome", b =>
                 {
                     b.Property<Guid>("Id")
@@ -860,19 +849,6 @@ namespace FrameIt.Api.Data.Migrations
                     b.Property<bool>("IsArchived")
                         .HasColumnType("boolean");
 
-                    b.Property<string>("JourneyPlaybackState")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<int>("JourneyPositionMs")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("JourneyRevision")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTimeOffset?>("JourneyStartedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
                     b.Property<int>("Phase")
                         .HasColumnType("integer");
 
@@ -1179,17 +1155,6 @@ namespace FrameIt.Api.Data.Migrations
                     b.Navigation("WorkshopSession");
                 });
 
-            modelBuilder.Entity("FrameIt.Api.Data.SessionJourneyEvent", b =>
-                {
-                    b.HasOne("FrameIt.Api.Data.WorkshopSession", "WorkshopSession")
-                        .WithMany("JourneyEvents")
-                        .HasForeignKey("WorkshopSessionId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("WorkshopSession");
-                });
-
             modelBuilder.Entity("FrameIt.Api.Data.SessionOutcome", b =>
                 {
                     b.HasOne("FrameIt.Api.Data.WorkshopSession", "WorkshopSession")
@@ -1395,8 +1360,6 @@ namespace FrameIt.Api.Data.Migrations
             modelBuilder.Entity("FrameIt.Api.Data.WorkshopSession", b =>
                 {
                     b.Navigation("Attachments");
-
-                    b.Navigation("JourneyEvents");
 
                     b.Navigation("Outcomes");
 

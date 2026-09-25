@@ -21,9 +21,11 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
     public DbSet<WorkshopSession> WorkshopSessions => Set<WorkshopSession>();
     public DbSet<SessionParticipant> SessionParticipants => Set<SessionParticipant>();
     public DbSet<QuestionResponse> QuestionResponses => Set<QuestionResponse>();
+    public DbSet<ResponseConsolidation> ResponseConsolidations => Set<ResponseConsolidation>();
     public DbSet<SessionSatisfactionResponse> SessionSatisfactionResponses => Set<SessionSatisfactionResponse>();
     public DbSet<ParticipantQuestion> ParticipantQuestions => Set<ParticipantQuestion>();
     public DbSet<SessionAttachment> SessionAttachments => Set<SessionAttachment>();
+    public DbSet<SessionJourneyEvent> SessionJourneyEvents => Set<SessionJourneyEvent>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -37,6 +39,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
         modelBuilder.Entity<Client>().HasQueryFilter(x => !OrganizationScopeEnabled || (CurrentOrganizationId != null && x.OrganizationId == CurrentOrganizationId));
         modelBuilder.Entity<Project>().HasQueryFilter(x => !OrganizationScopeEnabled || (CurrentOrganizationId != null && x.Client!.OrganizationId == CurrentOrganizationId));
         modelBuilder.Entity<WorkshopSession>().HasQueryFilter(x => !OrganizationScopeEnabled || (CurrentOrganizationId != null && x.Client!.OrganizationId == CurrentOrganizationId));
+        modelBuilder.Entity<SessionJourneyEvent>().HasQueryFilter(x => !OrganizationScopeEnabled || (CurrentOrganizationId != null && x.WorkshopSession!.Client!.OrganizationId == CurrentOrganizationId));
         modelBuilder.Entity<DynamicTemplate>().HasQueryFilter(x => !OrganizationScopeEnabled || x.IsBuiltIn || (CurrentOrganizationId != null && x.OrganizationId == CurrentOrganizationId));
         modelBuilder.Entity<TemplateSection>().HasQueryFilter(x => !OrganizationScopeEnabled || x.DynamicTemplate!.IsBuiltIn || (CurrentOrganizationId != null && x.DynamicTemplate!.OrganizationId == CurrentOrganizationId));
         modelBuilder.Entity<TemplateQuestion>().HasQueryFilter(x => !OrganizationScopeEnabled || x.TemplateSection!.DynamicTemplate!.IsBuiltIn || (CurrentOrganizationId != null && x.TemplateSection!.DynamicTemplate!.OrganizationId == CurrentOrganizationId));
@@ -44,6 +47,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
         modelBuilder.Entity<SessionQuestion>().HasQueryFilter(x => !OrganizationScopeEnabled || (CurrentOrganizationId != null && x.SessionSection!.WorkshopSession!.Client!.OrganizationId == CurrentOrganizationId));
         modelBuilder.Entity<SessionParticipant>().HasQueryFilter(x => !OrganizationScopeEnabled || (CurrentOrganizationId != null && x.WorkshopSession!.Client!.OrganizationId == CurrentOrganizationId));
         modelBuilder.Entity<QuestionResponse>().HasQueryFilter(x => !OrganizationScopeEnabled || (CurrentOrganizationId != null && x.SessionQuestion!.SessionSection!.WorkshopSession!.Client!.OrganizationId == CurrentOrganizationId));
+        modelBuilder.Entity<ResponseConsolidation>().HasQueryFilter(x => !OrganizationScopeEnabled || (CurrentOrganizationId != null && x.SessionQuestion!.SessionSection!.WorkshopSession!.Client!.OrganizationId == CurrentOrganizationId));
         modelBuilder.Entity<SessionOutcome>().HasQueryFilter(x => !OrganizationScopeEnabled || (CurrentOrganizationId != null && x.WorkshopSession!.Client!.OrganizationId == CurrentOrganizationId));
         modelBuilder.Entity<SessionAttachment>().HasQueryFilter(x => !OrganizationScopeEnabled || (CurrentOrganizationId != null && x.WorkshopSession!.Client!.OrganizationId == CurrentOrganizationId));
         modelBuilder.Entity<ParticipantQuestion>().HasQueryFilter(x => !OrganizationScopeEnabled || (CurrentOrganizationId != null && x.WorkshopSession!.Client!.OrganizationId == CurrentOrganizationId));
@@ -101,6 +105,27 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
         {
             entity.Property(x => x.OptionsJson).HasColumnType("jsonb");
             entity.Property(x => x.SettingsJson).HasColumnType("jsonb");
+        });
+
+        modelBuilder.Entity<SessionJourneyEvent>(entity =>
+        {
+            entity.Property(x => x.EventType).HasMaxLength(40);
+            entity.Property(x => x.MetadataJson).HasColumnType("jsonb");
+            entity.HasIndex(x => new { x.WorkshopSessionId, x.OccurredAtUtc });
+            entity.HasOne(x => x.WorkshopSession).WithMany(x => x.JourneyEvents)
+                .HasForeignKey(x => x.WorkshopSessionId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ResponseConsolidation>(entity =>
+        {
+            entity.Property(x => x.Status).HasMaxLength(24);
+            entity.Property(x => x.DraftJson).HasColumnType("jsonb");
+            entity.Property(x => x.PublishedJson).HasColumnType("jsonb");
+            entity.Property(x => x.SourceFingerprint).HasMaxLength(64);
+            entity.Property(x => x.Error).HasMaxLength(500);
+            entity.HasIndex(x => x.SessionQuestionId).IsUnique();
+            entity.HasOne(x => x.SessionQuestion).WithOne(x => x.Consolidation)
+                .HasForeignKey<ResponseConsolidation>(x => x.SessionQuestionId).OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<ParticipantQuestion>(entity =>

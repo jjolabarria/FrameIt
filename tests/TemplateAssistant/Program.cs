@@ -1,7 +1,9 @@
 using System.Net;
 using System.Text.Json;
 using FrameIt.Api.Services;
+using FrameIt.Api.Data;
 using FrameIt.Contracts;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -56,7 +58,76 @@ Check(fullResult.Key == draft.Key && TemplateValidation.Validate(fullResult) is 
 var saved = fullResult.ToEntity();
 var session = saved.InstantiateSession(new(Guid.NewGuid(), Guid.NewGuid(), saved.Id, "Smoke workshop"), () => "ABC123");
 Check(session.Sections.Count == fullResult.Sections.Count && session.Sections.First().Questions.Count > 0, "Proposal cannot instantiate a workshop");
-Console.WriteLine("PASS: validation, structured output, partial isolation, settings preservation, clarification, refusal, malformed output, provider error, cancellation and workshop creation.");
+
+var consolidationQuestion = new SessionQuestion { Kind = QuestionKind.RichText, Title = "¿Qué debemos mejorar?" };
+var consolidationResponses = new[]
+{
+    new QuestionResponse { Id = Guid.NewGuid(), SessionQuestion = consolidationQuestion, SessionQuestionId = consolidationQuestion.Id, SessionParticipantId = Guid.NewGuid(), SessionParticipant = new() { DisplayName = "Persona Alfa" }, Value = "Necesitamos encontrar antes los documentos" },
+    new QuestionResponse { Id = Guid.NewGuid(), SessionQuestion = consolidationQuestion, SessionQuestionId = consolidationQuestion.Id, SessionParticipantId = Guid.NewGuid(), SessionParticipant = new() { DisplayName = "Persona Beta" }, Value = "La búsqueda devuelve demasiado ruido" },
+    new QuestionResponse { Id = Guid.NewGuid(), SessionQuestion = consolidationQuestion, SessionQuestionId = consolidationQuestion.Id, SessionParticipantId = Guid.NewGuid(), SessionParticipant = new() { DisplayName = "Persona Gamma" }, Value = "Los permisos tardan demasiado" }
+};
+foreach (var response in consolidationResponses) consolidationQuestion.Responses.Add(response);
+var consolidationGroups = new[]
+{
+    new ConsolidationGroupDto("search", "Encontrar información", "La búsqueda y la localización de documentos generan fricción.", [consolidationResponses[0].Id, consolidationResponses[1].Id]),
+    new ConsolidationGroupDto("access", "Accesos", "La gestión de permisos retrasa el trabajo.", [consolidationResponses[2].Id])
+};
+Check(ResponseConsolidationLogic.Eligible(QuestionKind.ShortText) && ResponseConsolidationLogic.Eligible(QuestionKind.RichText) && ResponseConsolidationLogic.Eligible(QuestionKind.StickyNotes), "Free-text kind rejected");
+Check(!ResponseConsolidationLogic.Eligible(QuestionKind.Choice), "Structured kind accepted");
+Check(ResponseConsolidationLogic.ValidateGroups(consolidationGroups, consolidationResponses) is null, "Valid consolidation rejected");
+Check(ResponseConsolidationLogic.ValidateGroups([consolidationGroups[0]], consolidationResponses) is not null, "Missing source response accepted");
+var consolidationEnvelope = JsonSerializer.Serialize(new { output = new[] { new { content = new[] { new { type = "output_text", text = JsonSerializer.Serialize(new { groups = consolidationGroups }, ResponseConsolidationLogic.Json) } } } } });
+var consolidationHandler = new StubHandler(consolidationEnvelope);
+var consolidationClient = new ResponseConsolidationClient(new HttpClient(consolidationHandler) { BaseAddress = new Uri("https://provider.example/v1/") }, Options.Create(new OpenAiOptions { ApiKey = "test-only" }));
+var generatedGroups = await consolidationClient.GenerateAsync(consolidationQuestion, CancellationToken.None);
+Check(generatedGroups.Count == 2 && ResponseConsolidationLogic.ValidateGroups(generatedGroups, consolidationResponses) is null, "Provider consolidation invalid");
+Check(!consolidationHandler.Body!.Contains("Persona Alfa") && !consolidationHandler.Body.Contains("Persona Beta") && !consolidationHandler.Body.Contains("Persona Gamma"), "Participant identity sent to provider");
+using (var consolidationRequest = JsonDocument.Parse(consolidationHandler.Body!))
+    Check(!consolidationRequest.RootElement.GetProperty("store").GetBoolean(), "Consolidation provider storage enabled");
+
+var privateQuestion = new SessionQuestion
+{
+    Kind = QuestionKind.RichText, Title = "Privada", Prompt = "Contenido",
+    SettingsJson = JsonSerializer.Serialize(new Dictionary<string, string> { ["responseVisibility"] = "FacilitatorOnly" }),
+    Consolidation = new ResponseConsolidation { Status = ConsolidationStatus.Published, ShowConsolidated = true, SourceCount = 3, PublishedJson = JsonSerializer.Serialize(consolidationGroups, ResponseConsolidationLogic.Json) }
+};
+var privateSection = new SessionSection { Title = "Bloque", Questions = [privateQuestion] };
+var privateSession = new WorkshopSession { Title = "Privada", AccessCode = "PRIVATE", Template = new() { Title = "Plantilla" }, Sections = [privateSection], ActiveSectionId = privateSection.Id, ActiveQuestionId = privateQuestion.Id };
+Check(privateSession.ToSnapshot("https://example.test").Consolidation is null, "Private consolidation leaked into public snapshot");
+Check(privateSession.ToSnapshot("https://example.test", facilitator: true).Consolidation?.Groups.Count == 2, "Facilitator cannot inspect private consolidation");
+
+var dbOptions = new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase($"consolidation-{Guid.NewGuid()}").Options;
+await using (var db = new AppDbContext(dbOptions))
+{
+    var persistedQuestion = new SessionQuestion { Kind = QuestionKind.RichText, Title = consolidationQuestion.Title };
+    var org = new Organization { Name = "Test" };
+    var client = new Client { Organization = org, OrganizationId = org.Id, Name = "Client" };
+    var project = new Project { Client = client, ClientId = client.Id, Name = "Project", Code = "TEST" };
+    var template = new DynamicTemplate { Organization = org, OrganizationId = org.Id, Key = "test", Title = "Test" };
+    var sessionEntity = new WorkshopSession { Client = client, ClientId = client.Id, Project = project, ProjectId = project.Id, Template = template, TemplateId = template.Id, Title = "Session", AccessCode = "TEST01" };
+    var sectionEntity = new SessionSection { WorkshopSession = sessionEntity, WorkshopSessionId = sessionEntity.Id, Title = "Section" };
+    persistedQuestion.SessionSection = sectionEntity; persistedQuestion.SessionSectionId = sectionEntity.Id;
+    sessionEntity.Sections.Add(sectionEntity); sectionEntity.Questions.Add(persistedQuestion);
+    db.WorkshopSessions.Add(sessionEntity);
+    db.QuestionResponses.AddRange(consolidationResponses.Select(response => new QuestionResponse
+    {
+        SessionQuestionId = persistedQuestion.Id,
+        SessionParticipantId = Guid.NewGuid(),
+        Value = response.Value,
+        CreatedAtUtc = response.CreatedAtUtc
+    }));
+    await db.SaveChangesAsync();
+    db.ChangeTracker.Clear();
+    var storedQuestion = await db.Set<SessionQuestion>().Include(x => x.Responses).SingleAsync(x => x.Id == persistedQuestion.Id);
+    Check(storedQuestion.Kind == QuestionKind.RichText && storedQuestion.Responses.Count == 3, $"Stored consolidation source invalid: {storedQuestion.Kind}/{storedQuestion.Responses.Count}");
+    db.ChangeTracker.Clear();
+    var manager = new ResponseConsolidationManager(db);
+    var queued = await manager.QueueAsync(persistedQuestion.Id);
+    Check(queued?.Status == ConsolidationStatus.Pending && queued.SourceCount == 3, "Eligible consolidation not queued");
+    await manager.InvalidateAsync(persistedQuestion.Id);
+    Check((await db.ResponseConsolidations.SingleAsync()).Status == ConsolidationStatus.Stale, "Changed responses did not invalidate consolidation");
+}
+Console.WriteLine("PASS: template assistant plus consolidation eligibility, coverage, provider privacy, snapshot privacy, durable queue and invalidation.");
 await EndpointChecks.Run(draft, Envelope(new("¿Qué resultado buscas?", null)));
 
 if (args.Contains("--live"))

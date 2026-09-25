@@ -90,12 +90,29 @@ public sealed class WorkshopSession
     public Guid? ActiveSectionId { get; set; }
     public Guid? ActiveQuestionId { get; set; }
     public DateTimeOffset UpdatedAtUtc { get; set; } = DateTimeOffset.UtcNow;
+    public string JourneyPlaybackState { get; set; } = "Stopped";
+    public int JourneyPositionMs { get; set; }
+    public DateTimeOffset? JourneyStartedAtUtc { get; set; }
+    public int JourneyRevision { get; set; }
     public ICollection<SessionSection> Sections { get; set; } = [];
     public ICollection<SessionParticipant> Participants { get; set; } = [];
     public ICollection<SessionOutcome> Outcomes { get; set; } = [];
     public ICollection<SessionSatisfactionResponse> SatisfactionResponses { get; set; } = [];
     public ICollection<ParticipantQuestion> ParticipantQuestions { get; set; } = [];
     public ICollection<SessionAttachment> Attachments { get; set; } = [];
+    public ICollection<SessionJourneyEvent> JourneyEvents { get; set; } = [];
+}
+
+public sealed class SessionJourneyEvent
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid WorkshopSessionId { get; set; }
+    public WorkshopSession? WorkshopSession { get; set; }
+    public Guid? SessionSectionId { get; set; }
+    public Guid? SessionQuestionId { get; set; }
+    public string EventType { get; set; } = string.Empty;
+    public string MetadataJson { get; set; } = "{}";
+    public DateTimeOffset OccurredAtUtc { get; set; } = DateTimeOffset.UtcNow;
 }
 
 public sealed class SessionSection
@@ -123,6 +140,25 @@ public sealed class SessionQuestion
     public string OptionsJson { get; set; } = "[]";
     public string SettingsJson { get; set; } = "{}";
     public ICollection<QuestionResponse> Responses { get; set; } = [];
+    public ResponseConsolidation? Consolidation { get; set; }
+}
+
+public sealed class ResponseConsolidation
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid SessionQuestionId { get; set; }
+    public SessionQuestion? SessionQuestion { get; set; }
+    public string Status { get; set; } = "Pending";
+    public string DraftJson { get; set; } = "[]";
+    public string PublishedJson { get; set; } = "[]";
+    public string SourceFingerprint { get; set; } = string.Empty;
+    public int SourceCount { get; set; }
+    public int Attempts { get; set; }
+    public bool ShowConsolidated { get; set; }
+    public string? Error { get; set; }
+    public DateTimeOffset? NextAttemptAtUtc { get; set; }
+    public DateTimeOffset CreatedAtUtc { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset UpdatedAtUtc { get; set; } = DateTimeOffset.UtcNow;
 }
 
 public sealed class SessionParticipant
