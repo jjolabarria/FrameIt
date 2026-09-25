@@ -592,6 +592,19 @@ input[type=radio] { accent-color: var(--accent-strong); width: 18px; height: 18p
 .journey-static-node--consolidation { box-shadow: inset 0 4px #137f78; }
 @media (max-width: 700px) { .journey-header { flex-direction: column; gap: .35rem; } .journey-caption { width: calc(100% - 2rem); } .journey-finale > div { grid-template-columns: 1fr; } .journey-finale h1 { font-size: clamp(2.2rem,12vw,4rem); } }
 @media (prefers-reduced-motion: reduce) { .journey-webgl { display: none; } }
+.journey-caption { width: min(33rem, 42vw); padding: clamp(.9rem, 1.6vw, 1.5rem); border-left: 0; border-top: 3px solid #c83c32; background: #f7faf8f5; }
+.journey-caption h1 { max-width: none; font-size: clamp(1.25rem, 2.15vw, 2.35rem); line-height: 1.12; overflow-wrap: anywhere; }
+.journey-caption .journey-real-metrics { margin: .65rem 0; gap: 1rem; }
+.journey-caption .journey-real-metrics strong { font-size: 1.15rem; }
+.journey-answer { margin-top: 1rem; border-top: 1px solid #c9d6ca; padding-top: .9rem; }
+.journey-answer small { display: block; color: #526449; font-size: .78rem; font-weight: 800; margin-bottom: .5rem; }
+.journey-answer p { font-size: clamp(1rem, 1.55vw, 1.5rem); line-height: 1.4; color: #173b50; white-space: pre-wrap; overflow-wrap: anywhere; }
+.journey-answer-pages { display: flex; align-items: center; gap: .7rem; margin-top: .8rem; font-size: .8rem; font-variant-numeric: tabular-nums; }
+.journey-answer-pages button { min-width: 36px; min-height: 36px; padding: .3rem .6rem; color: #173b50; background: #e4ebe4; border: 1px solid #b3c5b5; cursor: pointer; }
+.journey-answer-pages button:disabled { opacity: .4; cursor: default; }
+.journey-answer-pages button:focus-visible { outline: 2px solid #137f78; outline-offset: 3px; }
+@media (max-width: 700px) { .journey-caption { width: calc(100% - 2rem); bottom: 1.5rem; } .journey-answer p { font-size: 1rem; } }
+@media (max-height: 650px) and (min-width: 701px) { .journey-caption { bottom: 1.5rem; padding: .8rem; } .journey-caption h1 { font-size: 1.25rem; } .journey-answer p { font-size: 1rem; } .journey-answer { margin-top: .5rem; padding-top: .5rem; } }
 
 .question-notification { position: fixed; z-index: 40; right: 1.25rem; bottom: 1.25rem; width: min(420px, calc(100vw - 2rem)); display: grid; grid-template-columns: 20px minmax(0, 1fr) 44px; gap: .75rem; padding: 1rem; border: 1px solid var(--line-strong); border-left: 4px solid var(--accent); border-radius: var(--radius); background: var(--panel); color: var(--ink); box-shadow: 0 8px 32px oklch(18% .025 255 / .16); }
 .question-notification > svg { margin-top: .25rem; }

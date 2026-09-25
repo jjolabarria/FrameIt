@@ -104,9 +104,11 @@ public sealed record SessionJourneyPlaybackDto(string State, int PositionMs, Dat
 public sealed record SessionJourneyBranchDto(string Label, int Votes, bool IsWinner);
 public sealed record SessionJourneyRegionDto(Guid Id, string Title, int Order, int CapitalCount, int ResponseCount);
 public sealed record SessionJourneyStopDto(string CapitalId, int Sequence);
+public sealed record SessionJourneyDetailDto(string Label, string Text);
 public sealed record SessionJourneyMilestoneDto(string Id, Guid RegionId, int RegionOrder, string Alias, string Kind,
     string SectionTitle, string Title, int Metric, int UniqueContributors,
-    IReadOnlyList<string> Topics, IReadOnlyList<SessionJourneyBranchDto> Branches);
+    IReadOnlyList<string> Topics, IReadOnlyList<SessionJourneyBranchDto> Branches,
+    IReadOnlyList<SessionJourneyDetailDto> Details);
 public sealed record SessionJourneyDto(Guid SessionId, string Title, bool IsInferred, int ParticipantCount,
     int ResponseCount, IReadOnlyList<SessionJourneyRegionDto> Regions, IReadOnlyList<SessionJourneyMilestoneDto> Milestones,
     IReadOnlyList<SessionJourneyStopDto> Route, IReadOnlyList<OutcomeItemDto> Outcomes,
