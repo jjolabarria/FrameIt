@@ -1,5 +1,6 @@
 using FrameIt.Api.Data;
 using FrameIt.Contracts;
+using Microsoft.EntityFrameworkCore;
 
 namespace FrameIt.Api.Services;
 
@@ -55,4 +56,18 @@ public static class JourneyBuilder
             EventType = type,
             OccurredAtUtc = DateTimeOffset.UtcNow
         });
+
+    public static Task RecordDirectAsync(AppDbContext db, Guid sessionId, string type,
+        Guid? sectionId = null, Guid? questionId = null, CancellationToken cancellationToken = default)
+    {
+        var eventId = Guid.NewGuid();
+        var occurredAtUtc = DateTimeOffset.UtcNow;
+        const string metadata = "{}";
+        return db.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO "SessionJourneyEvents"
+                ("Id", "WorkshopSessionId", "SessionSectionId", "SessionQuestionId", "EventType", "MetadataJson", "OccurredAtUtc")
+            VALUES
+                ({eventId}, {sessionId}, {sectionId}, {questionId}, {type}, CAST({metadata} AS jsonb), {occurredAtUtc})
+            """, cancellationToken);
+    }
 }

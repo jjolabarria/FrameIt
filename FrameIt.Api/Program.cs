@@ -562,11 +562,10 @@ app.MapPost("/api/sessions/{id:guid}/advance", async (
             .SetProperty(x => x.SessionStartedAtUtc, x => x.SessionStartedAtUtc ?? nextSessionStartedAtUtc)
             .SetProperty(x => x.UpdatedAtUtc, nextUpdatedAtUtc));
 
-    // ExecuteUpdate bypasses the change tracker. Persist the journey event while the
-    // tracked session still has its original values, then mirror the SQL update only
-    // for the snapshot returned below.
-    JourneyBuilder.Record(session, request.Phase.ToString(), nextActiveSectionId, nextActiveQuestionId);
-    await db.SaveChangesAsync();
+    // ExecuteUpdate bypasses the change tracker; keep the related event on the same
+    // direct SQL path so SaveChanges cannot issue a stale second session update.
+    await JourneyBuilder.RecordDirectAsync(db, session.Id, request.Phase.ToString(),
+        nextActiveSectionId, nextActiveQuestionId, httpContext.RequestAborted);
 
     session.Phase = request.Phase;
     session.ActiveSectionId = nextActiveSectionId;
@@ -634,9 +633,8 @@ app.MapPost("/api/sessions/{id:guid}/round-state", async (
             .SetProperty(x => x.SessionStartedAtUtc, x => x.SessionStartedAtUtc ?? nextSessionStartedAtUtc)
             .SetProperty(x => x.UpdatedAtUtc, nextUpdatedAtUtc));
 
-    // Keep EF from issuing a second UPDATE for the same row after ExecuteUpdate.
-    JourneyBuilder.Record(session, request.Phase.ToString(), nextActiveSectionId, nextActiveQuestionId);
-    await db.SaveChangesAsync();
+    await JourneyBuilder.RecordDirectAsync(db, session.Id, request.Phase.ToString(),
+        nextActiveSectionId, nextActiveQuestionId, httpContext.RequestAborted);
 
     session.Phase = request.Phase;
     session.RoundOpen = nextRoundOpen;
