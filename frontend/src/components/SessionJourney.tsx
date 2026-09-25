@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { JourneyMilestone, SessionJourney } from '../types'
 import { cameraClearance, createTerrainHeight, terrainContours } from './journeyTerrain'
 import { JourneyClock } from './journeyPlayback'
+import { JourneyCamera, JourneyIntro, approachHeight } from './journeyCamera'
 
 type MapPoint = { x: number; z: number }
 type AtlasLayout = { capitals: Map<string, MapPoint>; regions: Map<string, MapPoint>; width: number; height: number; minX: number; minZ: number }
@@ -192,8 +193,10 @@ function JourneyScene({ journey, layout, clock, duration, onFailed }: { journey:
       const point = new THREE.Vector3(); const target = new THREE.Vector3(); const closeCamera = new THREE.Vector3()
       const center = new THREE.Vector3(layout.minX + layout.width / 2, 0, layout.minZ + layout.height / 2)
       const overviewCamera = new THREE.Vector3()
-      let cameraAngle = -.55; let targetAngle = cameraAngle; let cameraAltitude = 12
-      let previousSeconds: number | null = null; let nextCameraSearch = 0
+      const cameraRig = new JourneyCamera(); const introShot = new JourneyIntro(clock.read() / 1000)
+      const ahead = new THREE.Vector3()
+      let previousSeconds: number | null = null
+      let displayedAltitude: number | null = null
       let previousFrameTime = performance.now()
       const render = () => {
         const position = clock.read()
@@ -215,7 +218,7 @@ function JourneyScene({ journey, layout, clock, duration, onFailed }: { journey:
         const activeId = routeItems[frame.index]?.id
         flags.forEach(({ id, color, flag }) => {
           flag.material.color.set(id === activeId ? '#c83c32' : color)
-          flag.rotation.y = cameraAngle
+          flag.rotation.y = cameraRig.angle
           const vertices = flag.geometry.attributes.position
           for (let index = 0; index < vertices.count; index++) {
             const x = vertices.getX(index)
@@ -232,37 +235,25 @@ function JourneyScene({ journey, layout, clock, duration, onFailed }: { journey:
         arrival.position.copy(point); arrival.position.y += .08
         arrival.scale.setScalar(.7 + smooth(pulse) * 2); arrival.material.opacity = (1 - pulse) * .5 * (1 - frame.overview)
         destinationRing.scale.setScalar(1 + smooth((value - .88) / .065) * .3)
-        const intro = 1 - smooth(seconds / 4)
         const lift = Math.sin(frame.flight * Math.PI)
         const radius = 10.5 + lift * 2
         const desiredAltitude = point.y + 9 + lift * 1.8
         const frameTime = performance.now()
-        const seeked = previousSeconds === null
         const delta = previousSeconds === seconds ? 0 : Math.min(.05, Math.max(0, (frameTime - previousFrameTime) / 1000))
         previousFrameTime = frameTime
-        const clearanceAt = (angle: number) => cameraClearance(point, point.x + Math.sin(angle) * radius, point.z + Math.cos(angle) * radius, terrainHeight)
-        if (seeked || frameTime >= nextCameraSearch) {
-          let bestScore = Infinity
-          // Prefer nearby viewpoints, but circle around an intervening ridge.
-          for (let candidate = -8; candidate <= 8; candidate++) {
-            const angle = cameraAngle + candidate * Math.PI / 8 + .04
-            const required = clearanceAt(angle)
-            const score = Math.max(0, required - desiredAltitude) * 5 + Math.abs(candidate) * .3
-            if (score < bestScore) { bestScore = score; targetAngle = angle }
-          }
-          nextCameraSearch = frameTime + 250
-        }
-        const angleDelta = Math.atan2(Math.sin(targetAngle - cameraAngle), Math.cos(targetAngle - cameraAngle))
-        cameraAngle = seeked ? targetAngle : cameraAngle + angleDelta * (1 - Math.exp(-delta * 2.2))
-        const requiredAltitude = Math.max(desiredAltitude, clearanceAt(cameraAngle))
-        cameraAltitude = seeked ? requiredAltitude : Math.max(requiredAltitude, cameraAltitude + (requiredAltitude - cameraAltitude) * (1 - Math.exp(-delta * 2)))
-        closeCamera.set(point.x + Math.sin(cameraAngle) * radius, cameraAltitude, point.z + Math.cos(cameraAngle) * radius)
+        const intro = introShot.advance(delta)
+        const aheadFrame = journeyFrame(clamp(clock.read(Date.now() + 700) / Math.max(1, duration)), routeItems.length)
+        curve.getPoint(aheadFrame.curvePosition, ahead); ahead.y = terrainHeight(ahead.x, ahead.z) + .1
+        const pose = cameraRig.update(point, ahead, radius, desiredAltitude, delta, terrainHeight)
+        closeCamera.set(pose.x, pose.y, pose.z)
         previousSeconds = seconds
         const distance = Math.max(20, terrainBounds.height * 1.3, terrainBounds.width / Math.max(.5, camera.aspect) * 1.3)
         overviewCamera.set(center.x - distance * (.22 + intro * .5), distance * (1 + intro * .3), center.z + distance * .8)
         const wide = Math.max(intro, frame.overview)
         camera.position.lerpVectors(closeCamera, overviewCamera, wide)
-        camera.position.y = Math.max(camera.position.y, cameraClearance(point, camera.position.x, camera.position.z, terrainHeight))
+        const safeAltitude = Math.max(camera.position.y, cameraClearance(point, camera.position.x, camera.position.z, terrainHeight))
+        displayedAltitude = displayedAltitude === null ? safeAltitude : approachHeight(displayedAltitude, safeAltitude, delta)
+        camera.position.y = displayedAltitude
         target.copy(point).lerp(center, wide); camera.lookAt(target)
         if (!document.hidden) renderer.render(scene, camera); raf = requestAnimationFrame(render)
       }
