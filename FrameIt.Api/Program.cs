@@ -562,6 +562,12 @@ app.MapPost("/api/sessions/{id:guid}/advance", async (
             .SetProperty(x => x.SessionStartedAtUtc, x => x.SessionStartedAtUtc ?? nextSessionStartedAtUtc)
             .SetProperty(x => x.UpdatedAtUtc, nextUpdatedAtUtc));
 
+    // ExecuteUpdate bypasses the change tracker. Persist the journey event while the
+    // tracked session still has its original values, then mirror the SQL update only
+    // for the snapshot returned below.
+    JourneyBuilder.Record(session, request.Phase.ToString(), nextActiveSectionId, nextActiveQuestionId);
+    await db.SaveChangesAsync();
+
     session.Phase = request.Phase;
     session.ActiveSectionId = nextActiveSectionId;
     session.ActiveQuestionId = nextActiveQuestionId;
@@ -572,9 +578,6 @@ app.MapPost("/api/sessions/{id:guid}/advance", async (
     session.RoundOpenedAtUtc = nextRoundOpenedAtUtc;
     session.SessionStartedAtUtc = nextSessionStartedAtUtc;
     session.UpdatedAtUtc = nextUpdatedAtUtc;
-
-    JourneyBuilder.Record(session, request.Phase.ToString(), nextActiveSectionId, nextActiveQuestionId);
-    await db.SaveChangesAsync();
 
     await transaction.CommitAsync();
 
@@ -631,6 +634,10 @@ app.MapPost("/api/sessions/{id:guid}/round-state", async (
             .SetProperty(x => x.SessionStartedAtUtc, x => x.SessionStartedAtUtc ?? nextSessionStartedAtUtc)
             .SetProperty(x => x.UpdatedAtUtc, nextUpdatedAtUtc));
 
+    // Keep EF from issuing a second UPDATE for the same row after ExecuteUpdate.
+    JourneyBuilder.Record(session, request.Phase.ToString(), nextActiveSectionId, nextActiveQuestionId);
+    await db.SaveChangesAsync();
+
     session.Phase = request.Phase;
     session.RoundOpen = nextRoundOpen;
     session.ResultsVisible = request.ResultsVisible;
@@ -641,9 +648,6 @@ app.MapPost("/api/sessions/{id:guid}/round-state", async (
     session.RoundOpenedAtUtc = nextRoundOpenedAtUtc;
     session.SessionStartedAtUtc = nextSessionStartedAtUtc;
     session.UpdatedAtUtc = nextUpdatedAtUtc;
-
-    JourneyBuilder.Record(session, request.Phase.ToString(), nextActiveSectionId, nextActiveQuestionId);
-    await db.SaveChangesAsync();
 
     await transaction.CommitAsync();
 
