@@ -549,8 +549,17 @@ input[type=radio] { accent-color: var(--accent-strong); width: 18px; height: 18p
 .journey-caption { position: absolute; z-index: 3; left: clamp(1rem,4vw,4rem); bottom: clamp(3.5rem,7vh,6rem); width: min(52rem,68vw); padding: clamp(1rem,2vw,1.8rem); background: color-mix(in srgb, #f7faf8 93%, transparent); border-left: 5px solid #d58d18; box-shadow: 0 16px 42px #173b501f; }
 .journey-caption h1 { max-width: 19ch; margin: .45rem 0 .65rem; font-size: clamp(2rem,4.4vw,5rem); line-height: .98; text-wrap: balance; }
 .journey-caption > p { font-size: clamp(1.05rem,1.7vw,1.55rem); color: #385867; }
+.journey-capital-heading { display: flex; align-items: baseline; flex-wrap: wrap; gap: .45rem 1rem; }
+.journey-capital-heading > span { color: #137f78; font-size: clamp(.72rem,1vw,.9rem); font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+.journey-capital-heading > small { color: #587079; font-size: clamp(.72rem,.9vw,.85rem); font-weight: 700; }
+.journey-real-metrics { display: flex; gap: 1.5rem; margin-top: 1rem; }
+.journey-real-metrics strong { display: flex; align-items: baseline; gap: .38rem; color: #173b50; font-family: var(--font-display); font-size: clamp(1.3rem,2vw,2rem); font-variant-numeric: tabular-nums; }
+.journey-real-metrics span { color: #587079; font-family: var(--font-body); font-size: clamp(.72rem,.9vw,.85rem); font-weight: 700; }
 .journey-topics { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 1rem; }
 .journey-topics strong { padding: .4rem .65rem; background: #dbe9e4; color: #174c4a; font-size: clamp(.75rem,1vw,.95rem); }
+.journey-vote-summary { display: flex; flex-wrap: wrap; gap: .45rem; margin-top: .75rem; }
+.journey-vote-summary > span { padding: .38rem .58rem; border: 1px solid #b9ccc6; background: #f7faf8; color: #385867; font-size: clamp(.72rem,.9vw,.85rem); }
+.journey-vote-summary .journey-vote-winner { border-color: #d58d18; color: #714b0e; }
 .journey-progress { position: absolute; z-index: 4; left: 0; right: 0; bottom: 0; height: 7px; background: #cedbd7; transform-origin: left; }
 .journey-progress span { display: block; width: 100%; height: 100%; background: #d58d18; transform-origin: left; will-change: transform; }
 .journey-finale-wrap { position: absolute; z-index: 3; inset: 0; display: grid; align-items: center; padding: clamp(5rem,9vw,9rem) clamp(1rem,7vw,7rem) 3rem; background: color-mix(in srgb, #eef3f1 90%, transparent); }
@@ -561,8 +570,19 @@ input[type=radio] { accent-color: var(--accent-strong); width: 18px; height: 18p
 .journey-finale small { color: #7b5a16; font-size: .72rem; font-weight: 800; text-transform: uppercase; letter-spacing: .09em; }
 .journey-finale article strong { font-size: clamp(1rem,1.5vw,1.35rem); }
 .journey-finale > p { font-size: clamp(1.1rem,2vw,1.7rem); color: #385867; }
-.journey-shell--static { position: relative; min-height: 70vh; padding: 7rem clamp(1rem,5vw,5rem) 3rem; overflow: auto; }
+.journey-shell--static { position: absolute; min-height: 0; padding: 0; overflow: hidden; }
 .journey-shell--static .journey-header { position: absolute; }
+.journey-static-atlas { position: absolute; inset: 0; padding: clamp(7rem,12vh,9rem) clamp(1rem,3vw,3rem) 2rem; }
+.journey-static-atlas svg { width: 100%; height: 100%; overflow: visible; }
+.atlas-region { fill: #ceddd3; stroke: #94afa3; stroke-width: 2; }
+.atlas-region-label { fill: #587079; font-family: var(--font-body); font-size: 18px; font-weight: 800; text-anchor: middle; text-transform: uppercase; letter-spacing: 2px; }
+.atlas-route { fill: none; stroke: #137f78; stroke-width: 7; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 13 9; opacity: .72; }
+.atlas-capital > circle:first-child { fill: #173b50; }
+.atlas-capital-ring { fill: none; stroke: #173b50; stroke-width: 2; opacity: .35; }
+.atlas-capital text { fill: #173b50; font-family: var(--font-display); font-size: 22px; font-weight: 700; }
+.atlas-capital--active > circle:first-child { fill: #d58d18; }
+.atlas-capital--active .atlas-capital-ring { stroke: #d58d18; stroke-width: 4; opacity: .8; }
+.atlas-destination { fill: none; stroke: #d58d18; stroke-width: 7; opacity: .8; }
 .journey-static { position: relative; display: grid; grid-template-columns: repeat(auto-fit,minmax(16rem,1fr)); gap: 1px; margin-bottom: 3rem; background: #b9ccc6; border: 1px solid #b9ccc6; }
 .journey-static-node { position: relative; display: flex; gap: .8rem; min-height: 8rem; padding: 1.2rem; background: #f7faf8; }
 .journey-static-node > span { color: #137f78; font-weight: 800; }
