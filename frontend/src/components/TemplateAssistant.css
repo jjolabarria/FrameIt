@@ -1,6 +1,5 @@
 .designer-with-assistant { display: grid; grid-template-columns: minmax(0, 1fr) minmax(330px, 410px); gap: 24px; align-items: start; }
-.designer-with-assistant > .designer-workbench { grid-template-columns: minmax(150px, .6fr) minmax(0, 2fr); }
-.designer-with-assistant .designer-config { grid-column: 1 / -1; }
+.designer-with-assistant > .designer-workbench { grid-template-columns: minmax(180px, .6fr) minmax(0, 2fr); }
 .template-assistant { min-width: 0; border-left: 3px solid var(--color-primary, #167568); padding: 0 0 24px 22px; }
 .template-assistant[hidden] { display: none; }
 .template-assistant h2 { font-size: 1.35rem; line-height: 1.25; }
