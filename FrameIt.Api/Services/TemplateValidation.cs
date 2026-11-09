@@ -48,6 +48,8 @@ public static class TemplateValidation
                     return "La configuración de presentación de una pregunta no es válida.";
                 if (question.Settings is { } settings && (settings.Count > 50 || settings.Any(x => !Text(x.Key, 160) || x.Value is null || x.Value.Length > 6000)))
                     return "Los ajustes adicionales de una pregunta no son válidos.";
+                if (question.Kind == QuestionKind.Choice && question.Settings is { } choiceSettings
+                    && ChoiceResponses.SettingsError(choiceSettings) is { } choiceError) return choiceError;
             }
         }
         return null;

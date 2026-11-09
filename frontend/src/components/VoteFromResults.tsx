@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { CheckSquare, Plus, X } from 'lucide-react'
 import { api } from '../lib/api'
 import type { QuestionOption, SessionSnapshot } from '../types'
+import { selectedChoiceIds } from '../lib/choice'
 
 type Candidate = QuestionOption & { selected: boolean }
 
@@ -51,12 +52,13 @@ export function VoteFromResults({ snapshot, disabled, onCreated }: { snapshot: S
   </section>
 }
 
-export function VotingResults({ options, responses, projected = false }: { options: QuestionOption[]; responses: SessionSnapshot['responses']; projected?: boolean }) {
+export function VotingResults({ options, responses, projected = false, kind = 'Voting' }: { options: QuestionOption[]; responses: SessionSnapshot['responses']; projected?: boolean; kind?: string }) {
   const total = responses.length
-  const results = options.map(option => ({ ...option, count: responses.filter(response => response.value === option.label).length }))
+  const results = options.map(option => ({ ...option, count: responses.filter(response => kind === 'Choice' ? selectedChoiceIds(response.value, options)?.includes(option.id) : response.value === option.label).length }))
     .sort((a, b) => b.count - a.count)
   return <section className={projected ? 'projected-responses voting-results voting-results--projected' : 'voting-results'}>
-    {projected && <div className="projection-response-heading"><span>Votación del grupo</span><span>{total} votos</span></div>}
+    {projected && <div className="projection-response-heading"><span>{kind === 'Choice' ? 'Selecciones del grupo' : 'Votación del grupo'}</span><span>{total} {kind === 'Choice' ? 'respuestas' : 'votos'}</span></div>}
+    {kind === 'Choice' && <p className="micro-copy">Personas que han marcado cada opción · {total} respuestas. En selección múltiple, una persona puede aparecer en varias opciones.</p>}
     <div className="voting-result-list">{results.map((result, index) => <article key={result.id}><div><span>{index + 1}</span><strong>{result.label}</strong><b>{result.count}</b></div><div className="vote-meter"><span style={{ transform: `scaleX(${total ? result.count / total : 0})` }} /></div></article>)}</div>
   </section>
 }

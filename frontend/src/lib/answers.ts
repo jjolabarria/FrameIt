@@ -1,4 +1,5 @@
 import type { QuestionOption } from '../types'
+import { choiceLimit, multipleChoice, selectedChoiceIds } from './choice'
 
 type Settings = Record<string, string> | null | undefined
 
@@ -9,6 +10,10 @@ export function answerLimit(settings: Settings, key: string, fallback: number, m
 
 export function answerSettingsIssues(kind: string, settings: Settings): string[] {
   const issues: string[] = []
+  if (kind === 'Choice') {
+    if (settings?.selectionMode && !['single', 'multiple'].includes(settings.selectionMode)) issues.push('Elige selección única o múltiple.')
+    if (multipleChoice(settings) && settings?.maxSelections && (!/^\d+$/.test(settings.maxSelections) || Number(settings.maxSelections) < 1 || Number(settings.maxSelections) > 50)) issues.push('El máximo de opciones debe estar entre 1 y 50, o vacío para permitir todas.')
+  }
   const limits: [string, string, number][] = kind === 'ShortText' ? [['maxLength', 'El límite de caracteres', 300]]
     : kind === 'RichText' ? [['maxLength', 'El límite de caracteres', 12000]]
     : kind === 'StickyNotes' ? [['maxLength', 'Los caracteres por nota', 2000], ['maxIdeas', 'El número de notas', 50]] : []
@@ -39,6 +44,10 @@ export function answerComplete(kind: string, value: string, options: QuestionOpt
   if (kind === 'StickyNotes') {
     const notes = value.split('\n\n').filter(note => note.trim())
     return notes.length <= answerLimit(settings, 'maxIdeas', 20, 50) && notes.every(note => note.length <= answerLimit(settings, 'maxLength', 300, 2000))
+  }
+  if (kind === 'Choice' && multipleChoice(settings)) {
+    const ids = selectedChoiceIds(value, options)
+    return ids !== null && ids.length > 0 && ids.length <= choiceLimit(options, settings)
   }
   if (kind === 'Choice' || kind === 'Voting') return options.some(option => option.label === value)
   if (kind === 'ColumnSort' || kind === 'Matrix') return assignments(value, options).every(Boolean)

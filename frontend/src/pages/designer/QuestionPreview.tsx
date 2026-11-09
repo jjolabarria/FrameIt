@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Check, RotateCcw } from 'lucide-react'
 import { formatTime, label, privacyText } from '../../lib/session'
 import { answerComplete, answerSettingsIssues } from '../../lib/answers'
+import { formatAnswer } from '../../lib/choice'
 import { QuestionAnswerInput } from '../../components/QuestionAnswerInput'
 import type { DesignerQuestionDraft } from '../../types'
 
@@ -27,7 +28,7 @@ function Preview({ sectionTitle, question }: { sectionTitle: string; question: D
     <h3>{question.title}</h3>
     <p>{question.prompt}</p>
     {settingsIssues.length > 0 ? <p className="micro-error" role="alert">Completa la configuración para probar esta pregunta. {settingsIssues.join(' ')}</p>
-      : sent ? <section className="preview-receipt"><Check size={24} aria-hidden="true" /><h4 role="status">{question.kind === 'Voting' ? 'Tu voto está guardado' : 'Tu respuesta está guardada'}</h4><p className="submitted-answer">{value}</p><p className="micro-copy">Simulación de la confirmación. No se ha enviado ninguna respuesta.</p><button type="button" className="secondary-button" onClick={() => setSent(false)}>Editar respuesta</button></section>
+      : sent ? <section className="preview-receipt"><Check size={24} aria-hidden="true" /><h4 role="status">{question.kind === 'Voting' ? 'Tu voto está guardado' : 'Tu respuesta está guardada'}</h4><p className="submitted-answer">{formatAnswer(question.kind, value, question.options)}</p><p className="micro-copy">Simulación de la confirmación. No se ha enviado ninguna respuesta.</p><button type="button" className="secondary-button" onClick={() => setSent(false)}>Editar respuesta</button></section>
       : <><QuestionAnswerInput key={inputRevision} kind={question.kind} options={question.options} settings={question.settings} value={value} onChange={setValue} />
         <button className="primary-button" type="button" disabled={!answerComplete(question.kind, value, question.options, question.settings)} onClick={() => setSent(true)}>{question.kind === 'Voting' ? 'Enviar voto' : 'Enviar respuesta'}</button></>}
     <p className="privacy-note">{privacyText(question.presentation)}</p>

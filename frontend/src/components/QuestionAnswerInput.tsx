@@ -3,6 +3,7 @@ import { ArrowDown, ArrowUp, Check, Plus, X } from 'lucide-react'
 import type { QuestionOption } from '../types'
 import './QuestionAnswerInput.css'
 import { answerLimit, answerScale, assignments } from '../lib/answers'
+import { choiceLimit, encodeChoice, multipleChoice, selectedChoiceIds } from '../lib/choice'
 
 type Props = { kind: string; options: QuestionOption[]; settings?: Record<string, string> | null; value: string; disabled?: boolean; onChange: (value: string) => void }
 
@@ -21,6 +22,14 @@ function IdeaNotes({ value, disabled, settings, onChange }: Pick<Props, 'value' 
 export function QuestionAnswerInput({ kind, options, settings, value, disabled, onChange }: Props) {
   const group = useId()
   if (kind === 'StickyNotes') return <IdeaNotes value={value} disabled={disabled} settings={settings} onChange={onChange} />
+  if (kind === 'Choice' && multipleChoice(settings)) {
+    const selected = selectedChoiceIds(value, options) ?? []
+    const limit = choiceLimit(options, settings)
+    return <fieldset disabled={disabled} className="answer-options answer-multiple"><legend>Selecciona una o varias opciones</legend>
+      <p className="micro-copy" role="status">{selected.length} seleccionadas · {limit < options.length ? `máximo ${limit}` : 'puedes marcar todas'}</p>
+      {options.map(option => <label className={`option-radio ${selected.includes(option.id) ? 'option-radio--selected' : ''}`} key={option.id}><input type="checkbox" checked={selected.includes(option.id)} disabled={disabled || (!selected.includes(option.id) && selected.length >= limit)} onChange={event => onChange(encodeChoice(event.target.checked ? [...selected, option.id] : selected.filter(id => id !== option.id), options))} /><span>{option.label || 'Opción sin texto'}{option.description && <small>{option.description}</small>}</span></label>)}
+    </fieldset>
+  }
   if (kind === 'Choice' || kind === 'Voting') return <fieldset disabled={disabled} className={`answer-options ${kind === 'Voting' ? 'answer-voting' : ''}`}>
     <legend>{kind === 'Voting' ? 'Da tu voto a una opción' : 'Selecciona una opción'}</legend>
     {kind === 'Voting' && <p className="micro-copy">Un voto por participante. Puedes cambiarlo mientras la ronda esté abierta.</p>}

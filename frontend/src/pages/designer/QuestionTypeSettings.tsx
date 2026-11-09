@@ -1,6 +1,7 @@
 import type { Dispatch } from 'react'
 import { label } from '../../lib/session'
 import { answerSettingsIssues } from '../../lib/answers'
+import { multipleChoice } from '../../lib/choice'
 import type { DesignerQuestionDraft } from '../../types'
 import type { DesignerAction, QuestionRef } from './draftReducer'
 import { questionTypeConfig } from './questionTypeConfig'
@@ -13,7 +14,9 @@ export function QuestionTypeSettings({ question, at, dispatch }: { question: Des
   const text = ['ShortText', 'RichText', 'StickyNotes'].includes(kind)
   const issues = answerSettingsIssues(kind, settings)
   return <section className="question-type-settings" aria-label={`Configuración de ${label(kind)}`}>
-    <div><p className="section-label">{label(kind)}</p><h3>Cómo se responde</h3><p className="micro-copy">{config.rule}</p></div>
+    <div><p className="section-label">{label(kind)}</p><h3>Cómo se responde</h3><p className="micro-copy">{kind === 'Choice' && multipleChoice(settings) ? 'El participante puede marcar varias opciones y enviar su selección conjunta.' : config.rule}</p></div>
+    {kind === 'Choice' && <><label>Modo de selección<select value={settings?.selectionMode ?? 'single'} onChange={event => set('selectionMode', event.target.value)}><option value="single">Única · una opción</option><option value="multiple">Múltiple · varias opciones</option></select></label>
+      {multipleChoice(settings) && <label>Máximo de opciones seleccionables<input type="number" min={1} max={50} value={settings?.maxSelections ?? ''} placeholder="Todas las opciones" onChange={event => set('maxSelections', event.target.value)} /><span className="micro-copy">Déjalo vacío para permitir todas. Se requiere al menos una opción.</span></label>}</>}
     {text && <>
       <label>{kind === 'StickyNotes' ? 'Caracteres por nota' : 'Límite de caracteres'}<input type="number" min={1} max={kind === 'ShortText' ? 300 : kind === 'StickyNotes' ? 2000 : 12000} value={settings?.maxLength ?? (kind === 'RichText' ? '6000' : '300')} onChange={event => set('maxLength', event.target.value)} /></label>
       <label>Texto de ayuda del campo<input maxLength={200} value={settings?.answerPlaceholder ?? ''} placeholder={kind === 'StickyNotes' ? 'Escribe una idea concreta…' : kind === 'ShortText' ? 'Resume tu respuesta en una frase…' : 'Desarrolla tu respuesta…'} onChange={event => set('answerPlaceholder', event.target.value)} /></label>

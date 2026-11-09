@@ -46,7 +46,7 @@ public static class JourneyBuilder
                     : [];
                 var branches = x.question.Kind is QuestionKind.Voting or QuestionKind.Choice
                     ? TemplateMapper.DeserializeOptions(x.question.OptionsJson).Select(option => new SessionJourneyBranchDto(
-                        option.Label, x.question.Responses.Count(response => string.Equals(response.Value, option.Label, StringComparison.OrdinalIgnoreCase)), false)).ToList()
+                        option.Label, x.question.Responses.Count(response => ChoiceResponses.Matches(x.question, response.Value, option)), false)).ToList()
                     : [];
                 if (branches.Count > 0)
                 {
@@ -97,7 +97,7 @@ public static class JourneyBuilder
             var options = TemplateMapper.DeserializeOptions(question.OptionsJson).Select(option => new
             {
                 option.Label,
-                Votes = question.Responses.Count(response => string.Equals(response.Value, option.Label, StringComparison.OrdinalIgnoreCase))
+                Votes = question.Responses.Count(response => ChoiceResponses.Matches(question, response.Value, option))
             }).OrderByDescending(option => option.Votes).ToList();
             var best = options.Select(option => option.Votes).DefaultIfEmpty(0).Max();
             var tied = options.Count(option => option.Votes == best) > 1;

@@ -18,3 +18,5 @@
 .idea-note > label { flex: 1; min-width: 0; }
 .idea-note textarea { background: color-mix(in oklch, var(--attention, #d5b366) 12%, var(--panel)); }
 .submitted-answer, .response-list article p { white-space: pre-wrap; }
+.voting-results--projected .projection-response-heading { flex-wrap: wrap; }
+.voting-results--projected .projection-response-heading > span:last-child { white-space: nowrap; }

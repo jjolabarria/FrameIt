@@ -45,6 +45,12 @@ const presentation = { timerSeconds: 60, responseVisibility: 'AfterClose', respo
         await config.getByLabel('Texto de ayuda del campo').fill('Escribe aquí tu propuesta');
       }
       if (kind === 'StickyNotes') await config.getByLabel('Máximo de notas por participante').fill('2');
+      if (kind === 'Choice') {
+        await config.getByLabel('Modo de selección').selectOption('multiple');
+        await config.getByLabel('Máximo de opciones seleccionables').fill('0');
+        await config.getByRole('alert').waitFor();
+        await config.getByLabel('Máximo de opciones seleccionables').fill('2');
+      }
       if (kind === 'Ranking') {
         await config.getByRole('combobox').selectOption('ascending');
         await page.locator('.designer-editor').getByRole('button', { name: 'Bajar elemento 1', exact: true }).click();
@@ -74,7 +80,11 @@ const presentation = { timerSeconds: 60, responseVisibility: 'AfterClose', respo
         assert(await preview.getByRole('button', { name: 'Añadir idea' }).isDisabled());
         await preview.getByLabel('Idea 2', { exact: true }).fill('Otra idea');
       }
-      if (kind === 'Choice' || kind === 'Voting') { await preview.getByText('Mejorar la entrada', { exact: true }).waitFor(); await preview.getByRole('radio').first().check(); }
+      if (kind === 'Choice' || kind === 'Voting') {
+        await preview.getByText('Mejorar la entrada', { exact: true }).waitFor();
+        if (kind === 'Choice') { for (const checkbox of await preview.getByRole('checkbox').all()) await checkbox.check(); }
+        else await preview.getByRole('radio').first().check();
+      }
       if (kind === 'Ranking') {
         await preview.getByText('Ordena de menor a mayor prioridad', { exact: true }).waitFor();
         assert.match(await preview.locator('li').first().innerText(), /Búsqueda/);
@@ -84,6 +94,7 @@ const presentation = { timerSeconds: 60, responseVisibility: 'AfterClose', respo
       if (kind === 'Matrix') for (const row of await preview.locator('.matrix-row').all()) await row.getByRole('radio', { name: 'Alto', exact: true }).check();
       await send.click();
       await preview.getByRole('status').waitFor();
+      if (kind === 'Choice') assert.equal(await preview.locator('.submitted-answer').innerText(), 'Acceso\nBúsqueda');
       await preview.getByRole('button', { name: 'Editar respuesta' }).click();
       assert(await send.isEnabled());
       await preview.getByRole('button', { name: 'Reiniciar' }).click();
@@ -102,6 +113,7 @@ const presentation = { timerSeconds: 60, responseVisibility: 'AfterClose', respo
       assert.equal(question.settings.custom, 'conservar'); assert.equal(question.presentation.timerSeconds, 0);
       if (['ShortText', 'RichText', 'StickyNotes'].includes(kind)) assert.equal(question.settings.maxLength, '40');
       if (kind === 'StickyNotes') assert.equal(question.settings.maxIdeas, '2');
+      if (kind === 'Choice') { assert.equal(question.settings.selectionMode, 'multiple'); assert.equal(question.settings.maxSelections, '2'); }
       if (kind === 'ColumnSort') assert.equal(question.settings.columns, 'Ahora\nDespués');
       if (kind === 'Matrix') assert.equal(question.settings.matrixScale, 'Bajo\nAlto');
       if (kind === 'Ranking') { assert.equal(question.settings.rankingDirection, 'ascending'); assert.equal(question.options[0].id, 'b'); }
@@ -109,6 +121,7 @@ const presentation = { timerSeconds: 60, responseVisibility: 'AfterClose', respo
       await page.locator('.outline-node--question .outline-select').click();
       await page.getByRole('tab', { name: 'Vista previa' }).click();
       await preview.getByText('Sin límite', { exact: true }).waitFor();
+      if (kind === 'Choice') assert.equal(await preview.getByRole('checkbox').count(), 2);
     }
     assert.equal(responseRequests, 0); assert.deepEqual(errors, []);
     console.log('PASS: type-specific configuration, validation, initial ranking, limits, descriptions, simulated save/edit/reset, no response POSTs, settings persistence/reload and responsive layout.');

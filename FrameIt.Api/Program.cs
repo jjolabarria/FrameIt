@@ -684,6 +684,8 @@ app.MapPost("/api/sessions/{id:guid}/responses", async (
         return Results.Conflict(new { message = "La pregunta ha cambiado. Tu borrador se conserva; revisa la pregunta actual." });
     if (string.IsNullOrWhiteSpace(request.Value))
         return Results.BadRequest(new { message = "Escribe una respuesta antes de enviarla." });
+    if (question.Kind == QuestionKind.Choice && ChoiceResponses.Validate(question, request.Value) is { } choiceError)
+        return Results.BadRequest(new { message = choiceError });
     if (question.Kind == QuestionKind.Voting && !TemplateMapper.DeserializeOptions(question.OptionsJson)
             .Any(option => string.Equals(option.Label, request.Value.Trim(), StringComparison.Ordinal)))
         return Results.BadRequest(new { message = "Selecciona una de las opciones disponibles." });

@@ -186,7 +186,7 @@ public sealed class SessionDocumentationService : ISessionDocumentationService
                             {
                                 Participant = TemplateMapper.DeserializePresentation(question.SettingsJson).ResponseIdentityMode == FrameIt.Contracts.ResponseIdentityMode.Anonymous
                                     ? "Anónimo" : response.SessionParticipant?.DisplayName ?? "Anónimo",
-                                response.Value
+                                Value = ChoiceResponses.Format(question, response.Value)
                             })
                             .ToList()
                     })
@@ -417,7 +417,7 @@ public sealed class SessionDocumentationService : ISessionDocumentationService
                     }
                     var anonymous = TemplateMapper.DeserializePresentation(question.SettingsJson).ResponseIdentityMode == FrameIt.Contracts.ResponseIdentityMode.Anonymous;
                     var responses = question.Responses.OrderBy(x => x.CreatedAtUtc)
-                        .Select(x => $"{(anonymous ? "Anónimo" : x.SessionParticipant?.DisplayName ?? "Anónimo")}: {x.Value}").ToList();
+                        .Select(x => $"{(anonymous ? "Anónimo" : x.SessionParticipant?.DisplayName ?? "Anónimo")}: {ChoiceResponses.Format(question, x.Value)}").ToList();
                     column.Item().Element(block => RenderBulletSection(block, "Respuestas registradas", responses));
                 }
             }

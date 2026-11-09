@@ -128,6 +128,7 @@ await using (var db = new AppDbContext(dbOptions))
     Check((await db.ResponseConsolidations.SingleAsync()).Status == ConsolidationStatus.Stale, "Changed responses did not invalidate consolidation");
 }
 Console.WriteLine("PASS: template assistant plus consolidation eligibility, coverage, provider privacy, snapshot privacy, durable queue and invalidation.");
+await ChoiceResponseChecks.Run();
 await TemplateEditingChecks.Run(draft);
 await EndpointChecks.Run(draft, Envelope(new("¿Qué resultado buscas?", null)));
 
