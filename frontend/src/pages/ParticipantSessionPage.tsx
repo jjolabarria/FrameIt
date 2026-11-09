@@ -4,7 +4,9 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { Check, ArrowRight, LockKeyhole } from 'lucide-react'
 import { api, formatBytes, getTimeRemaining } from '../lib/api'
-import { formatTime, privacyText, label, hasAnswerOptions } from '../lib/session'
+import { formatTime, privacyText, label } from '../lib/session'
+import { QuestionAnswerInput } from '../components/QuestionAnswerInput'
+import { answerComplete } from '../lib/answers'
 import { readSession, writeSession, clearParticipantStorage } from '../lib/storage'
 import { useSessionLive } from '../hooks/useSessionLive'
 import { ConnectionNotice, Disclosure, ErrorNotice, PhaseBadge } from '../components/SessionUI'
@@ -25,7 +27,7 @@ function AnswerForm({ snapshot, identity, connected, onSnapshot }: { snapshot: S
   function update(patch: Partial<typeof draft>) { setDraft(current => { const next = { ...current, ...patch }; writeSession(storageKey, next); return next }) }
   async function submit(event: React.FormEvent) {
     event.preventDefault()
-    if (busy || !connected || !snapshot.roundOpen || !draft.value.trim()) return
+    if (busy || !connected || !snapshot.roundOpen || !answerComplete(snapshot.questionKind, draft.value, snapshot.options)) return
     const questionId = snapshot.activeQuestionId
     const value = draft.value.trim()
     setBusy(true); setError('')
@@ -41,9 +43,8 @@ function AnswerForm({ snapshot, identity, connected, onSnapshot }: { snapshot: S
     <ErrorNotice message={error} />
     {draft.sent && !draft.editing ? <section className="answer-receipt"><div className="receipt-mark"><Check size={24} /></div><h3 role="status">Tu respuesta está guardada</h3><p className="submitted-answer">{draft.value}</p><p className="muted-copy">{snapshot.roundOpen ? 'Puedes cambiarla mientras la ronda esté abierta.' : 'Espera las indicaciones del facilitador.'}</p>{snapshot.roundOpen && <button className="secondary-button" onClick={() => update({ editing: true })}>Editar respuesta</button>}</section>
     : snapshot.roundOpen ? <form onSubmit={submit} className="answer-form">
-      {hasAnswerOptions(snapshot.questionKind) && snapshot.options.length > 0 && <fieldset className="answer-options"><legend>Elige una opción</legend>{snapshot.options.map(option => <label className={draft.value === option.label ? 'option-radio option-radio--selected' : 'option-radio'} key={option.id}><input type="radio" name="answer-option" checked={draft.value === option.label} onChange={() => update({ value: option.label })} disabled={busy} /><span>{option.label}</span></label>)}</fieldset>}
-      {snapshot.questionKind !== 'Voting' && <label>{hasAnswerOptions(snapshot.questionKind) && snapshot.options.length ? 'Tu respuesta · puedes matizar la opción' : 'Tu respuesta'}<textarea autoFocus rows={4} value={draft.value} disabled={busy} onChange={e => update({ value: e.target.value })} placeholder="Comparte tu idea con el grupo…" /></label>}
-      <div className="answer-submit"><button className="primary-button" disabled={busy || !connected || !draft.value.trim()}>{busy ? 'Enviando…' : draft.sent ? 'Guardar cambios' : 'Enviar respuesta'}<ArrowRight size={18} /></button><span className="micro-copy">{connected ? 'Tu borrador se guarda en este dispositivo.' : 'Reconecta para enviar. Tu borrador se conserva.'}</span></div>
+      <QuestionAnswerInput kind={snapshot.questionKind} options={snapshot.options} settings={snapshot.questionSettings} value={draft.value} disabled={busy} onChange={value => update({ value })} />
+      <div className="answer-submit"><button className="primary-button" disabled={busy || !connected || !answerComplete(snapshot.questionKind, draft.value, snapshot.options)}>{busy ? 'Enviando…' : draft.sent ? 'Guardar cambios' : snapshot.questionKind === 'Voting' ? 'Enviar voto' : 'Enviar respuesta'}<ArrowRight size={18} /></button><span className="micro-copy">{connected ? 'Tu borrador se guarda en este dispositivo.' : 'Reconecta para enviar. Tu borrador se conserva.'}</span></div>
     </form> : <div className="waiting-message" role="status"><span className="waiting-orbit" aria-hidden="true" /><h3>{snapshot.phase === 'Lobby' ? 'Ya estás dentro' : snapshot.phase === 'Results' ? 'Es momento de compartir' : snapshot.roundOpenedAtUtc ? 'Ronda cerrada' : 'La ronda está en espera'}</h3><p>{snapshot.phase === 'Lobby' ? 'El facilitador abrirá la primera pregunta. Mantén esta pantalla abierta.' : snapshot.phase === 'Results' ? 'Revisa los resultados con el grupo.' : 'El facilitador indicará el siguiente paso.'}</p>{draft.value && !draft.sent && <p className="draft-retained">Tu borrador sigue guardado para esta pregunta.</p>}</div>}
     <p className="privacy-note"><LockKeyhole size={14} />{privacyText(snapshot)}</p>
   </div>

@@ -33,5 +33,7 @@ export function QuestionFields({ section, question, index, catalog, busy, onUplo
     <label>{slide ? 'Texto de la diapositiva' : 'Enunciado'}<textarea rows={slide ? 6 : 4} value={question.prompt} onChange={event => dispatch({ type: 'updateQuestion', at, patch: { prompt: event.target.value } })} /></label>
     {slide ? <SlideFields at={at} slide={question} busy={busy} onUploadImage={onUploadImage} dispatch={dispatch} />
       : hasAnswerOptions(question.kind) && <OptionsEditor at={at} question={question} dispatch={dispatch} />}
+    {question.kind === 'ColumnSort' && <label>Columnas · una por línea<textarea rows={3} value={question.settings?.columns ?? 'Por explorar\nEn marcha\nResuelto'} onChange={event => dispatch({ type: 'updateSetting', at, key: 'columns', value: event.target.value })} /><span className="micro-copy">Define al menos dos columnas para clasificar las opciones.</span></label>}
+    {question.kind === 'Matrix' && <label>Escala · un valor por línea<textarea rows={5} value={question.settings?.matrixScale ?? '1\n2\n3\n4\n5'} onChange={event => dispatch({ type: 'updateSetting', at, key: 'matrixScale', value: event.target.value })} /><span className="micro-copy">Cada opción será una fila. Define al menos dos valores para evaluarla.</span></label>}
   </>
 }

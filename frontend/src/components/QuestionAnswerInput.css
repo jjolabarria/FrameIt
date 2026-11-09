@@ -1,0 +1,20 @@
+.answer-options input[type="radio"], .matrix-cell input { width: 18px; height: 18px; min-height: 18px; flex: 0 0 18px; margin: 0; padding: 0; accent-color: var(--accent-strong); }
+.option-radio > span { display: block; flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.option-radio small { display: block; margin-top: .25rem; font-weight: 400; color: var(--ink-soft); }
+.answer-voting .option-radio { min-height: 62px; border-width: 2px; }
+.answer-voting .option-radio > svg { visibility: hidden; color: var(--accent-strong); }
+.answer-voting .option-radio--selected > svg { visibility: visible; }
+.answer-ranking, .answer-classification, .answer-matrix, .idea-notes { display: grid; gap: .85rem; min-width: 0; }
+.answer-ranking ol { display: grid; gap: .6rem; list-style: none; padding: 0; margin: 0; }
+.answer-ranking li { display: flex; align-items: center; gap: .6rem; padding: .5rem; border-bottom: 1px solid var(--line-strong); }
+.answer-ranking li > strong { color: var(--accent-strong); min-width: 1.5ch; }
+.answer-ranking li > span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.answer-ranking li > div { display: flex; gap: .25rem; }
+.matrix-row > div { display: flex; flex-wrap: wrap; gap: .4rem; }
+.matrix-cell { display: flex; align-items: center; gap: .4rem; min-height: 44px; padding: .5rem; border: 1px solid var(--line-strong); border-radius: 7px; cursor: pointer; }
+.matrix-cell--selected { background: var(--wash); border-color: var(--accent-strong); }
+.matrix-cell span { overflow-wrap: anywhere; }
+.idea-note { display: flex; align-items: start; gap: .5rem; }
+.idea-note > label { flex: 1; min-width: 0; }
+.idea-note textarea { background: color-mix(in oklch, var(--attention, #d5b366) 12%, var(--panel)); }
+.submitted-answer, .response-list article p { white-space: pre-wrap; }
