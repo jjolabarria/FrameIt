@@ -1,4 +1,5 @@
 import { hasAnswerOptions } from '../../lib/session'
+import { answerSettingsIssues } from '../../lib/answers'
 import type { TemplateDraft } from '../../types'
 import type { Selection } from './draftReducer'
 
@@ -18,6 +19,7 @@ export function validateDraft(draft: TemplateDraft): DraftIssue[] {
     if (!section.title.trim()) issues.push({ target: { kind: 'section', sectionKey: section.key }, label: 'Bloque sin título', message: 'Falta el título del bloque.' })
     section.questions.forEach((question, index) => {
       const problems = missing([['título', question.title], ['enunciado', question.prompt]]).map(field => `Falta ${field}.`)
+      problems.push(...answerSettingsIssues(question.kind, question.settings))
       if (hasAnswerOptions(question.kind) && (question.options.length < 2 || question.options.some(option => !option.label.trim())))
         problems.push('Necesita al menos dos opciones con texto.')
       if (problems.length) issues.push({

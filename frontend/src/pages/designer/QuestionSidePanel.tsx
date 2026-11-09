@@ -3,6 +3,8 @@ import { Clock, Eye, Settings2 } from 'lucide-react'
 import type { DesignerQuestionDraft, DesignerSectionDraft, TemplateDraft } from '../../types'
 import type { DesignerAction } from './draftReducer'
 import { QuestionPreview } from './QuestionPreview'
+import { QuestionTypeSettings } from './QuestionTypeSettings'
+import './QuestionDesigner.css'
 
 type Tab = 'rules' | 'preview'
 
@@ -11,7 +13,9 @@ function QuestionRules({ section, question, dispatch }: { section: DesignerSecti
   const set = (patch: Partial<DesignerQuestionDraft['presentation']>) => dispatch({ type: 'updatePresentation', at, patch })
   if (question.kind === 'Presentation') return <p className="muted-copy">Las diapositivas no recogen respuestas: se proyectan mientras avanzas la agenda.</p>
   return <div className="designer-rules">
-    <label><span><Clock size={14} /> Tiempo (segundos)</span><input min={15} max={86400} step={15} type="number" value={question.presentation.timerSeconds} onChange={event => set({ timerSeconds: Number(event.target.value) || 60 })} /></label>
+    <QuestionTypeSettings question={question} at={at} dispatch={dispatch} />
+    <h3>Reglas de la ronda</h3>
+    <label><span><Clock size={14} /> Tiempo (segundos)</span><input min={0} max={86400} step={15} type="number" value={question.presentation.timerSeconds} onChange={event => set({ timerSeconds: Number(event.target.value) || 0 })} /><span className="micro-copy">0 para una ronda sin límite de tiempo.</span></label>
     <label><span><Eye size={14} /> Visibilidad</span>
       <select value={question.presentation.responseVisibility} onChange={event => set({ responseVisibility: event.target.value })}>
         <option value="AfterClose">Cuando publique resultados</option>
@@ -52,7 +56,7 @@ export function QuestionSidePanel({ draft, section, question, dispatch }: Props)
   </aside>
   return <aside className="designer-config" aria-label="Reglas y vista previa">
     <div className="designer-tabs" role="tablist" aria-label="Panel de la pregunta">
-      <button type="button" role="tab" id="designer-tab-rules" aria-controls="designer-panel-rules" aria-selected={tab === 'rules'} onClick={() => setTab('rules')}><Settings2 size={15} />Reglas</button>
+      <button type="button" role="tab" id="designer-tab-rules" aria-controls="designer-panel-rules" aria-selected={tab === 'rules'} onClick={() => setTab('rules')}><Settings2 size={15} />Configuración</button>
       <button type="button" role="tab" id="designer-tab-preview" aria-controls="designer-panel-preview" aria-selected={tab === 'preview'} onClick={() => setTab('preview')}><Eye size={15} />Vista previa</button>
     </div>
     {tab === 'rules'

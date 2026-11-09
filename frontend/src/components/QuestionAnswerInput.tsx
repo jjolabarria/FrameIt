@@ -2,22 +2,25 @@ import { useId, useState } from 'react'
 import { ArrowDown, ArrowUp, Check, Plus, X } from 'lucide-react'
 import type { QuestionOption } from '../types'
 import './QuestionAnswerInput.css'
-import { answerScale, assignments } from '../lib/answers'
+import { answerLimit, answerScale, assignments } from '../lib/answers'
 
 type Props = { kind: string; options: QuestionOption[]; settings?: Record<string, string> | null; value: string; disabled?: boolean; onChange: (value: string) => void }
 
-function IdeaNotes({ value, disabled, onChange }: Pick<Props, 'value' | 'disabled' | 'onChange'>) {
+function IdeaNotes({ value, disabled, settings, onChange }: Pick<Props, 'value' | 'disabled' | 'settings' | 'onChange'>) {
   const [notes, setNotes] = useState(() => value ? value.split('\n\n') : [''])
+  const maxLength = answerLimit(settings, 'maxLength', 300, 2000)
+  const maxIdeas = answerLimit(settings, 'maxIdeas', 20, 50)
   function update(next: string[]) { setNotes(next); onChange(next.map(note => note.trim()).filter(Boolean).join('\n\n')) }
   return <fieldset className="idea-notes" disabled={disabled}><legend>Una idea por nota</legend>
-    {notes.map((note, index) => <div className="idea-note" key={index}><label>Idea {index + 1}<textarea rows={3} value={note} onChange={event => update(notes.map((item, i) => i === index ? event.target.value : item))} placeholder="Escribe una idea concreta…" /></label><button type="button" className="icon-button" aria-label={`Eliminar idea ${index + 1}`} disabled={notes.length === 1} onClick={() => update(notes.filter((_, i) => i !== index))}><X size={16} /></button></div>)}
-    <button type="button" className="secondary-button" onClick={() => update([...notes, ''])}><Plus size={16} />Añadir idea</button>
+    <p className="micro-copy">Hasta {maxIdeas} notas · {maxLength} caracteres por nota.</p>
+    {notes.map((note, index) => <div className="idea-note" key={index}><label>Idea {index + 1}<textarea aria-label={`Idea ${index + 1}`} rows={3} maxLength={maxLength} value={note} onChange={event => update(notes.map((item, i) => i === index ? event.target.value : item))} placeholder={settings?.answerPlaceholder || 'Escribe una idea concreta…'} /><small className="micro-copy">{note.length}/{maxLength}</small></label><button type="button" className="icon-button" aria-label={`Eliminar idea ${index + 1}`} disabled={notes.length === 1} onClick={() => update(notes.filter((_, i) => i !== index))}><X size={16} /></button></div>)}
+    <button type="button" className="secondary-button" disabled={disabled || notes.length >= maxIdeas} onClick={() => update([...notes, ''])}><Plus size={16} />Añadir idea</button>
   </fieldset>
 }
 
 export function QuestionAnswerInput({ kind, options, settings, value, disabled, onChange }: Props) {
   const group = useId()
-  if (kind === 'StickyNotes') return <IdeaNotes value={value} disabled={disabled} onChange={onChange} />
+  if (kind === 'StickyNotes') return <IdeaNotes value={value} disabled={disabled} settings={settings} onChange={onChange} />
   if (kind === 'Choice' || kind === 'Voting') return <fieldset disabled={disabled} className={`answer-options ${kind === 'Voting' ? 'answer-voting' : ''}`}>
     <legend>{kind === 'Voting' ? 'Da tu voto a una opción' : 'Selecciona una opción'}</legend>
     {kind === 'Voting' && <p className="micro-copy">Un voto por participante. Puedes cambiarlo mientras la ronda esté abierta.</p>}
@@ -31,7 +34,7 @@ export function QuestionAnswerInput({ kind, options, settings, value, disabled, 
     })
     const save = (next: QuestionOption[]) => onChange(next.map((option, index) => `${index + 1}. ${option.label}`).join('\n'))
     function move(index: number, direction: number) { const next = [...ordered]; [next[index], next[index + direction]] = [next[index + direction], next[index]]; save(next) }
-    return <fieldset disabled={disabled} className="answer-ranking"><legend>Ordena de mayor a menor prioridad</legend><p className="micro-copy">Usa las flechas para cambiar la posición.</p><ol>{ordered.map((option, index) => <li key={option.id}><strong>{index + 1}</strong><span>{option.label || 'Opción sin texto'}</span><div><button type="button" className="icon-button" aria-label={`Subir ${option.label}`} disabled={disabled || index === 0} onClick={() => move(index, -1)}><ArrowUp size={16} /></button><button type="button" className="icon-button" aria-label={`Bajar ${option.label}`} disabled={disabled || index === ordered.length - 1} onClick={() => move(index, 1)}><ArrowDown size={16} /></button></div></li>)}</ol>{!value && <button type="button" className="secondary-button" onClick={() => save(ordered)}>Usar este orden</button>}</fieldset>
+    return <fieldset disabled={disabled} className="answer-ranking"><legend>{settings?.rankingDirection === 'ascending' ? 'Ordena de menor a mayor prioridad' : 'Ordena de mayor a menor prioridad'}</legend><p className="micro-copy">Usa las flechas para cambiar la posición.</p><ol>{ordered.map((option, index) => <li key={option.id}><strong>{index + 1}</strong><span>{option.label || 'Opción sin texto'}</span><div><button type="button" className="icon-button" aria-label={`Subir ${option.label}`} disabled={disabled || index === 0} onClick={() => move(index, -1)}><ArrowUp size={16} /></button><button type="button" className="icon-button" aria-label={`Bajar ${option.label}`} disabled={disabled || index === ordered.length - 1} onClick={() => move(index, 1)}><ArrowDown size={16} /></button></div></li>)}</ol>{!value && <button type="button" className="secondary-button" onClick={() => save(ordered)}>Usar este orden</button>}</fieldset>
   }
   if (kind === 'ColumnSort' || kind === 'Matrix') {
     const selected = assignments(value, options)
@@ -42,6 +45,6 @@ export function QuestionAnswerInput({ kind, options, settings, value, disabled, 
       {options.map((option, index) => kind === 'ColumnSort' ? <label key={option.id}>{option.label || 'Opción sin texto'}<select value={selected[index]} onChange={event => update(index, event.target.value)}><option value="">Selecciona una columna</option>{columns.map(column => <option key={column}>{column}</option>)}</select></label> : <fieldset className="matrix-row" key={option.id}><legend>{option.label || 'Opción sin texto'}</legend><div>{columns.map(column => <label key={column} className={selected[index] === column ? 'matrix-cell matrix-cell--selected' : 'matrix-cell'}><input type="radio" name={`${group}-${option.id}`} checked={selected[index] === column} onChange={() => update(index, column)} /><span>{column}</span></label>)}</div></fieldset>)}
     </fieldset>
   }
-  if (kind === 'ShortText') return <label>Tu respuesta breve<input value={value} disabled={disabled} maxLength={300} onChange={event => onChange(event.target.value)} placeholder="Resume tu respuesta en una frase…" /></label>
-  return <label>Tu respuesta<textarea rows={6} value={value} disabled={disabled} onChange={event => onChange(event.target.value)} placeholder="Desarrolla tu respuesta…" /></label>
+  const maxLength = answerLimit(settings, 'maxLength', kind === 'ShortText' ? 300 : 6000, kind === 'ShortText' ? 300 : 12000)
+  return <label>{kind === 'ShortText' ? 'Tu respuesta breve' : 'Tu respuesta'}{kind === 'ShortText' ? <input aria-label="Tu respuesta breve" value={value} disabled={disabled} maxLength={maxLength} onChange={event => onChange(event.target.value)} placeholder={settings?.answerPlaceholder || 'Resume tu respuesta en una frase…'} /> : <textarea aria-label="Tu respuesta" rows={6} maxLength={maxLength} value={value} disabled={disabled} onChange={event => onChange(event.target.value)} placeholder={settings?.answerPlaceholder || 'Desarrolla tu respuesta…'} />}<small className="micro-copy">{value.length}/{maxLength} caracteres</small></label>
 }

@@ -201,16 +201,12 @@ app.MapPut("/api/templates/{id:guid}", async (Guid id, CreateTemplateRequest req
     if (await db.DynamicTemplates.AnyAsync(x => x.Id != id && x.Key == request.Key))
         return Results.Conflict(new { message = "Ya existe una plantilla con esa clave." });
 
-    var replacement = request.ToEntity();
-    template.Key = replacement.Key;
-    template.Title = replacement.Title;
-    template.Objective = replacement.Objective;
-    template.Audience = replacement.Audience;
-    template.FacilitatorGuidance = replacement.FacilitatorGuidance;
-    template.UpdatedAtUtc = DateTimeOffset.UtcNow;
-    db.Set<TemplateSection>().RemoveRange(template.Sections);
-    template.Sections = replacement.Sections;
-    await db.SaveChangesAsync();
+    TemplateEditing.Apply(db, template, request);
+    try { await db.SaveChangesAsync(); }
+    catch (DbUpdateConcurrencyException)
+    {
+        return Results.Conflict(new { message = "La plantilla ha cambiado o se ha eliminado durante el guardado. Tu borrador se conserva; comprueba el estado de la plantilla antes de volver a guardar." });
+    }
     return Results.NoContent();
 }).RequireAuthorization();
 

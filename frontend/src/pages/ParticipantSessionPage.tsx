@@ -27,7 +27,7 @@ function AnswerForm({ snapshot, identity, connected, onSnapshot }: { snapshot: S
   function update(patch: Partial<typeof draft>) { setDraft(current => { const next = { ...current, ...patch }; writeSession(storageKey, next); return next }) }
   async function submit(event: React.FormEvent) {
     event.preventDefault()
-    if (busy || !connected || !snapshot.roundOpen || !answerComplete(snapshot.questionKind, draft.value, snapshot.options)) return
+    if (busy || !connected || !snapshot.roundOpen || !answerComplete(snapshot.questionKind, draft.value, snapshot.options, snapshot.questionSettings)) return
     const questionId = snapshot.activeQuestionId
     const value = draft.value.trim()
     setBusy(true); setError('')
@@ -44,7 +44,7 @@ function AnswerForm({ snapshot, identity, connected, onSnapshot }: { snapshot: S
     {draft.sent && !draft.editing ? <section className="answer-receipt"><div className="receipt-mark"><Check size={24} /></div><h3 role="status">Tu respuesta está guardada</h3><p className="submitted-answer">{draft.value}</p><p className="muted-copy">{snapshot.roundOpen ? 'Puedes cambiarla mientras la ronda esté abierta.' : 'Espera las indicaciones del facilitador.'}</p>{snapshot.roundOpen && <button className="secondary-button" onClick={() => update({ editing: true })}>Editar respuesta</button>}</section>
     : snapshot.roundOpen ? <form onSubmit={submit} className="answer-form">
       <QuestionAnswerInput kind={snapshot.questionKind} options={snapshot.options} settings={snapshot.questionSettings} value={draft.value} disabled={busy} onChange={value => update({ value })} />
-      <div className="answer-submit"><button className="primary-button" disabled={busy || !connected || !answerComplete(snapshot.questionKind, draft.value, snapshot.options)}>{busy ? 'Enviando…' : draft.sent ? 'Guardar cambios' : snapshot.questionKind === 'Voting' ? 'Enviar voto' : 'Enviar respuesta'}<ArrowRight size={18} /></button><span className="micro-copy">{connected ? 'Tu borrador se guarda en este dispositivo.' : 'Reconecta para enviar. Tu borrador se conserva.'}</span></div>
+      <div className="answer-submit"><button className="primary-button" disabled={busy || !connected || !answerComplete(snapshot.questionKind, draft.value, snapshot.options, snapshot.questionSettings)}>{busy ? 'Enviando…' : draft.sent ? 'Guardar cambios' : snapshot.questionKind === 'Voting' ? 'Enviar voto' : 'Enviar respuesta'}<ArrowRight size={18} /></button><span className="micro-copy">{connected ? 'Tu borrador se guarda en este dispositivo.' : 'Reconecta para enviar. Tu borrador se conserva.'}</span></div>
     </form> : <div className="waiting-message" role="status"><span className="waiting-orbit" aria-hidden="true" /><h3>{snapshot.phase === 'Lobby' ? 'Ya estás dentro' : snapshot.phase === 'Results' ? 'Es momento de compartir' : snapshot.roundOpenedAtUtc ? 'Ronda cerrada' : 'La ronda está en espera'}</h3><p>{snapshot.phase === 'Lobby' ? 'El facilitador abrirá la primera pregunta. Mantén esta pantalla abierta.' : snapshot.phase === 'Results' ? 'Revisa los resultados con el grupo.' : 'El facilitador indicará el siguiente paso.'}</p>{draft.value && !draft.sent && <p className="draft-retained">Tu borrador sigue guardado para esta pregunta.</p>}</div>}
     <p className="privacy-note"><LockKeyhole size={14} />{privacyText(snapshot)}</p>
   </div>
